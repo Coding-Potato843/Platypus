@@ -65,7 +65,10 @@ Platypus is a photo sharing and organization web application that allows users t
 - Show join date
 - **Show last sync time** (when photos were last synced)
 - Display stats: photo count, friend count, storage used
-- Edit profile functionality
+- **Edit profile functionality** (Profile Edit Modal)
+  - Edit username (표시 이름)
+  - Edit user ID (@username 형식)
+  - Edit avatar URL (외부 이미지 URL)
 
 ---
 
@@ -88,6 +91,11 @@ Platypus is a photo sharing and organization web application that allows users t
 - Show location badge on hover
 - Show author badge for friend's photos
 - Group indicator icon for categorized photos
+- **Pagination** (Load More button)
+  - 20 photos per page
+  - "더 보기" button appears when more photos exist
+  - Loading indicator while fetching
+  - Works for both personal and friend photos
 
 #### 2.3 Photo Detail Modal
 - Full-size image view
@@ -97,6 +105,8 @@ Platypus is a photo sharing and organization web application that allows users t
   - Location
   - Author (for friend's photos)
 - Manage group assignments from detail view
+- **Download photo** (fetches image as blob and triggers browser download)
+- Delete photo (with confirmation)
 
 #### 2.4 Photo Data Model
 ```typescript
@@ -183,6 +193,11 @@ interface SearchFilters {
 - View all friends in Account tab
 - Remove friend functionality (with confirmation)
 - Display friend avatar (initial-based), name, and ID
+- **Add friend functionality** (Add Friend Modal)
+  - Search users by username or user ID
+  - Display search results with avatar, name, ID
+  - One-click add friend button
+  - Shows "친구" badge for existing friends
 
 #### 5.3 Friend Photo Integration
 - Friend photos visible in Friends tab
@@ -262,6 +277,9 @@ const SortMode = {
 - **Photo Modal**: Full photo view with metadata and group management
 - **Sync Modal**: Photo selection interface for importing photos
 - **Group Modal**: Group management with create, edit, delete functionality
+- **Profile Edit Modal**: Edit username, user ID, and avatar URL
+- **Add Friend Modal**: Search users and add friends with one click
+- **Load More Button**: Pagination for photo galleries (20 photos per page)
 
 #### 7.6 CSS Architecture
 ```css
@@ -488,19 +506,17 @@ const { data } = supabase.storage.from('photos').getPublicUrl(filePath);
 ```
 Project_02_Platypus/
 ├── Frontend/                    # Render Static Site로 배포
-│   ├── index.html
+│   ├── index.html               # Auth Modal 포함
 │   ├── css/
 │   │   └── styles.css
 │   └── js/
-│       ├── main.js
-│       ├── components/
-│       │   ├── gallery.js
-│       │   ├── slideshow.js
-│       │   ├── modals.js
-│       │   └── tabs.js
+│       ├── main.js              # 앱 진입점, 상태 관리, 이벤트 리스너
 │       └── services/
-│           ├── api.js           # Supabase 클라이언트 설정 포함
-│           └── auth.js
+│           ├── api.js           # Supabase 클라이언트 및 API 함수
+│           └── auth.js          # Supabase Auth 연동
+├── supabase_rls_setup.sql       # 테이블 RLS 정책 SQL
+├── supabase_storage_setup.sql   # Storage RLS 정책 SQL (참고용)
+├── todolist.txt                 # 개발 진행 상황 추적
 ├── CLAUDE.md
 └── 클로드.md
 ```
@@ -547,18 +563,56 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 ---
 
-## Notes
+## Auth Modal UI
 
-- Photo storage uses Supabase Storage
-- Consider implementing pagination for large photo libraries
-- Friend photo sharing requires proper privacy controls via Supabase RLS
-- `anon key`는 클라이언트에 노출되어도 안전 (RLS가 보호)
+index.html에 포함된 인증 모달:
+
+```html
+<!-- Auth Modal Structure -->
+<div class="modal" id="authModal">
+  <div class="modal-content auth-modal-content">
+    <!-- Tab Navigation -->
+    <div class="auth-tabs">
+      <button class="auth-tab active" data-auth-tab="login">로그인</button>
+      <button class="auth-tab" data-auth-tab="signup">회원가입</button>
+    </div>
+
+    <!-- Login Form -->
+    <form id="loginForm" class="auth-form active">
+      <input type="email" id="loginEmail" placeholder="이메일" required>
+      <input type="password" id="loginPassword" placeholder="비밀번호" required>
+      <button type="submit">로그인</button>
+    </form>
+
+    <!-- Signup Form -->
+    <form id="signupForm" class="auth-form">
+      <input type="email" id="signupEmail" placeholder="이메일" required>
+      <input type="text" id="signupUsername" placeholder="사용자명" required>
+      <input type="password" id="signupPassword" placeholder="비밀번호" required>
+      <input type="password" id="signupPasswordConfirm" placeholder="비밀번호 확인" required>
+      <button type="submit">회원가입</button>
+    </form>
+  </div>
+</div>
+```
 
 ---
 
-## Frontend Implementation Status
+## Notes
+
+- Photo storage uses Supabase Storage (Public bucket)
+- RLS 정책이 활성화되어야 데이터 보안이 적용됨
+- `anon key`는 클라이언트에 노출되어도 안전 (RLS가 보호)
+- 회원가입 후 이메일 확인이 필요할 수 있음 (Supabase 설정에 따라 다름)
+- Mock 데이터는 fallback으로 유지 (API 실패 시)
+
+---
+
+## Implementation Status
 
 ### Completed (✅)
+
+#### UI/UX
 - [x] App layout with sticky header and tab navigation
 - [x] Photo gallery with responsive grid (2-5 columns)
 - [x] Photo detail modal with metadata display
@@ -574,64 +628,182 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 - [x] Keyboard shortcuts for slideshow
 - [x] Dark theme with cyan accent
 - [x] Responsive design (mobile-friendly)
-- [x] ES6 module-based component architecture
-- [x] API service with full endpoint coverage
-- [x] Auth service with token management
+- [x] Auth Modal (로그인/회원가입 UI)
 
-### Pending (Backend Required)
-- [ ] Actual API integration (currently using mock data)
-- [ ] User registration/login screens
-- [ ] Real photo upload from device
-- [ ] Friend search and add functionality
-- [ ] Profile editing
-- [ ] Photo download functionality
+#### Supabase Integration
+- [x] Supabase 클라이언트 설정 (api.js)
+- [x] Supabase Auth 연동 (auth.js)
+  - signUp, signInWithPassword, signOut, getUser
+  - onAuthStateChange 리스너
+  - 세션 자동 유지
+- [x] Photos API (getPhotos, uploadPhoto, deletePhoto, updatePhotoGroups)
+- [x] Groups API (getGroups, createGroup, updateGroup, deleteGroup)
+- [x] Friends API (getFriends, addFriend, removeFriend, searchUsers)
+- [x] User API (getUserProfile, updateUserProfile, getUserStats)
+- [x] Storage 연동 (photo upload/delete with public URLs)
+
+#### Security (RLS)
+- [x] RLS 정책 SQL 파일 생성 (supabase_rls_setup.sql)
+- [x] Storage 정책 SQL 파일 생성 (supabase_storage_setup.sql)
+- [x] Photos Storage 버킷 설정 (Public)
+- [x] Storage 정책 (INSERT, SELECT, DELETE)
+
+### Pending (수동 설정 필요) ⚠️
+- [ ] Supabase SQL Editor에서 supabase_rls_setup.sql 실행
+- [ ] 테이블 RLS 정책 활성화 (users, photos, groups, photo_groups, friendships)
+
+### Additional Features (✅ Completed)
+- [x] 프로필 편집 기능 (Profile Edit Modal)
+- [x] 친구 검색 및 추가 기능 (Add Friend Modal with Search)
+- [x] 사진 다운로드 기능 (Photo Download)
+- [x] 페이지네이션 구현 (Load More Button, 20 photos per page)
 
 ---
 
 ## JavaScript Module Structure
 
+### main.js (앱 진입점)
 ```javascript
-// main.js - App entry point
-// - State management
-// - Event listeners setup
-// - Initial render
+// State Management
+const state = {
+  photos: [],           // 사용자 사진
+  friendPhotos: [],     // 친구 사진
+  friends: [],          // 친구 목록
+  groups: [],           // 그룹 목록
+  currentTab: 'my-photos',
+  currentGroup: 'all',
+  pagination: {         // 페이지네이션 상태
+    photosPerPage: 20,
+    myPhotosOffset: 0,
+    friendPhotosOffset: 0,
+    hasMoreMyPhotos: true,
+    hasMoreFriendPhotos: true,
+    isLoadingMore: false,
+  },
+  // ...
+};
 
-// components/gallery.js
-export class Gallery {
-  setPhotos(photos)
-  setFilter(key, value)
-  render()
-}
+// Data Loading (Supabase) - with Pagination
+async function loadAllUserData()           // 모든 데이터 로드
+async function loadPhotos(loadMore)        // 사진 로드 (페이지네이션 지원)
+async function loadGroups()                // 그룹 로드
+async function loadFriendPhotos(loadMore)  // 친구 사진 로드 (페이지네이션 지원)
+async function loadFriends()               // 친구 목록 로드
 
-// components/slideshow.js
-export class Slideshow {
-  open(photos)
-  close()
-  next() / prev()
-  play() / stop()
-}
+// Auth Functions
+async function handleLogin(e)      // 로그인 처리
+async function handleSignup(e)     // 회원가입 처리
+async function handleLogout()      // 로그아웃 처리
+async function updateUIForAuthenticatedUser()   // 로그인 후 UI 업데이트
+function updateUIForUnauthenticatedUser()       // 로그아웃 후 UI 업데이트
 
-// components/modals.js
-export class Modal { open() / close() }
-export class PhotoModal extends Modal
-export class SyncModal extends Modal
-export class GroupModal extends Modal
-export class ConfirmModal extends Modal
-export class ToastManager
+// Profile Edit Functions
+async function openProfileEditModal()      // 프로필 편집 모달 열기
+async function handleProfileEdit(e)        // 프로필 저장 처리
 
-// components/tabs.js
-export class Tabs { switchTo(tabId) }
-export class GroupFilter { selectGroup(groupId) }
+// Friend Search & Add Functions
+function openAddFriendModal()              // 친구 추가 모달 열기
+async function handleFriendSearch()        // 사용자 검색
+async function addFriend(friendId, name, btn)  // 친구 추가
 
-// services/api.js
-export async function getPhotos(params)
-export async function uploadPhotos(photos)
-export async function getGroups()
-// ... etc
+// Photo Functions
+async function handlePhotoDownload()       // 사진 다운로드
 
-// services/auth.js
-export async function login(email, password)
-export async function logout()
-export function isAuthenticated()
-// ... etc
+// Rendering Functions
+function renderMyPhotos()          // 내 사진 렌더링 (Load More 버튼 포함)
+function renderFriendPhotos()      // 친구 사진 렌더링 (Load More 버튼 포함)
+function renderGroupList()         // 그룹 목록 렌더링
+function renderFriendsList()       // 친구 목록 렌더링
 ```
+
+### services/api.js (Supabase API)
+```javascript
+// Supabase Client
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Photo API
+export async function getPhotos(userId, params)
+export async function getPhoto(photoId)
+export async function uploadPhoto(userId, file, metadata)
+export async function uploadPhotos(userId, photos)
+export async function deletePhoto(photoId, userId)
+export async function updatePhotoGroups(photoId, groupIds)
+
+// Group API
+export async function getGroups(userId)
+export async function createGroup(userId, name)
+export async function updateGroup(groupId, userId, name)
+export async function deleteGroup(groupId, userId)
+
+// Friends API
+export async function getFriends(userId)
+export async function getFriendsPhotos(userId, params)
+export async function addFriend(userId, friendId)
+export async function removeFriend(userId, friendId)
+export async function searchUsers(searchTerm)
+
+// User API
+export async function getUserProfile(userId)
+export async function updateUserProfile(userId, updates)
+export async function updateLastSync(userId)
+export async function getUserStats(userId)
+```
+
+### services/auth.js (Supabase Auth)
+```javascript
+// Auth Functions
+export async function initAuth()                    // 세션 초기화
+export async function login(email, password)        // 로그인
+export async function register(email, password, username, displayName)  // 회원가입
+export async function logout()                      // 로그아웃
+export function getCurrentUser()                    // 현재 사용자 가져오기
+export async function getCurrentUserProfile()       // 프로필 가져오기
+export function onAuthStateChange(callback)         // 인증 상태 변경 리스너
+
+// Validation
+export function validateEmail(email)
+export function validatePassword(password)
+export function validateUsername(username)
+
+// Custom Error
+export class AuthError extends Error
+```
+
+---
+
+## RLS Policy Files
+
+### supabase_rls_setup.sql
+테이블별 Row Level Security 정책을 설정하는 SQL 파일:
+- users: 모든 사용자 조회 가능, 본인만 생성/수정
+- photos: 본인 사진만 CRUD, 친구 사진 조회 가능
+- groups: 본인 그룹만 CRUD
+- photo_groups: 본인 사진-그룹 연결만 CRUD
+- friendships: 본인 친구 관계만 CRUD
+
+### supabase_storage_setup.sql
+Storage 버킷 정책 (참고용, Dashboard에서 설정):
+- photos 버킷: Public
+- INSERT: 인증된 사용자가 자기 폴더에만 업로드
+- DELETE: 인증된 사용자가 자기 파일만 삭제
+- SELECT: Public 버킷이므로 정책 불필요
+
+---
+
+## Storage Configuration
+
+### Photos 버킷 설정
+| 설정 | 값 |
+|------|-----|
+| Bucket Name | photos |
+| Public | Yes (체크) |
+| File Size Limit | 50MB (기본값) |
+
+### Storage Policies (3개)
+| Policy Name | Operation | Definition |
+|-------------|-----------|------------|
+| User can upload photos | INSERT | `bucket_id = 'photos' AND (storage.foldername(name))[1] = auth.uid()::text` |
+| User can delete own photos | DELETE | `bucket_id = 'photos' AND (storage.foldername(name))[1] = auth.uid()::text` |
+| (Auto-created with DELETE) | SELECT | `bucket_id = 'photos' AND (storage.foldername(name))[1] = auth.uid()::text` |
+
+> Note: Public 버킷이므로 SELECT 정책 없이도 이미지 조회 가능

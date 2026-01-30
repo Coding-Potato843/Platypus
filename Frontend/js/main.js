@@ -18,8 +18,11 @@ import {
     deleteGroup as apiDeleteGroup,
     getFriends,
     getFriendsPhotos,
+    addFriend as apiAddFriend,
     removeFriend as apiRemoveFriend,
+    searchUsers,
     getUserStats,
+    updateUserProfile,
     ApiError
 } from './services/api.js';
 
@@ -76,19 +79,47 @@ const mockFriends = [
 // ============================================
 
 /**
- * Load user's photos from Supabase
+ * Load user's photos from Supabase with pagination
+ * @param {boolean} loadMore - If true, loads more photos; if false, resets and loads from start
  */
-async function loadPhotos() {
+async function loadPhotos(loadMore = false) {
     const user = getCurrentUser();
     if (!user) return;
 
+    if (state.pagination.isLoadingMore) return;
+
     try {
-        const photos = await getPhotos(user.id);
-        state.photos = photos;
+        if (!loadMore) {
+            // Reset pagination
+            state.pagination.myPhotosOffset = 0;
+            state.pagination.hasMoreMyPhotos = true;
+            state.photos = [];
+        }
+
+        state.pagination.isLoadingMore = true;
+
+        const photos = await getPhotos(user.id, {
+            limit: state.pagination.photosPerPage,
+            offset: state.pagination.myPhotosOffset,
+        });
+
+        if (photos.length < state.pagination.photosPerPage) {
+            state.pagination.hasMoreMyPhotos = false;
+        }
+
+        if (loadMore) {
+            state.photos = [...state.photos, ...photos];
+        } else {
+            state.photos = photos;
+        }
+
+        state.pagination.myPhotosOffset += photos.length;
         renderMyPhotos();
     } catch (error) {
         console.error('Failed to load photos:', error);
         // Keep mock data as fallback
+    } finally {
+        state.pagination.isLoadingMore = false;
     }
 }
 
@@ -112,19 +143,47 @@ async function loadGroups() {
 }
 
 /**
- * Load friends' photos from Supabase
+ * Load friends' photos from Supabase with pagination
+ * @param {boolean} loadMore - If true, loads more photos; if false, resets and loads from start
  */
-async function loadFriendPhotos() {
+async function loadFriendPhotos(loadMore = false) {
     const user = getCurrentUser();
     if (!user) return;
 
+    if (state.pagination.isLoadingMore) return;
+
     try {
-        const photos = await getFriendsPhotos(user.id);
-        state.friendPhotos = photos;
+        if (!loadMore) {
+            // Reset pagination
+            state.pagination.friendPhotosOffset = 0;
+            state.pagination.hasMoreFriendPhotos = true;
+            state.friendPhotos = [];
+        }
+
+        state.pagination.isLoadingMore = true;
+
+        const photos = await getFriendsPhotos(user.id, {
+            limit: state.pagination.photosPerPage,
+            offset: state.pagination.friendPhotosOffset,
+        });
+
+        if (photos.length < state.pagination.photosPerPage) {
+            state.pagination.hasMoreFriendPhotos = false;
+        }
+
+        if (loadMore) {
+            state.friendPhotos = [...state.friendPhotos, ...photos];
+        } else {
+            state.friendPhotos = photos;
+        }
+
+        state.pagination.friendPhotosOffset += photos.length;
         renderFriendPhotos();
     } catch (error) {
         console.error('Failed to load friend photos:', error);
         // Keep mock data as fallback
+    } finally {
+        state.pagination.isLoadingMore = false;
     }
 }
 
@@ -196,6 +255,15 @@ const state = {
     },
     selectedSyncPhotos: new Set(),
     currentPhotoId: null,
+    // Pagination state
+    pagination: {
+        photosPerPage: 20,
+        myPhotosOffset: 0,
+        friendPhotosOffset: 0,
+        hasMoreMyPhotos: true,
+        hasMoreFriendPhotos: true,
+        isLoadingMore: false,
+    },
 };
 
 // ============================================
@@ -302,6 +370,19 @@ const elements = {
     signupUsername: document.getElementById('signupUsername'),
     signupPassword: document.getElementById('signupPassword'),
     signupPasswordConfirm: document.getElementById('signupPasswordConfirm'),
+
+    // Profile Edit Modal Elements
+    profileEditModal: document.getElementById('profileEditModal'),
+    profileEditForm: document.getElementById('profileEditForm'),
+    editUsername: document.getElementById('editUsername'),
+    editUserId: document.getElementById('editUserId'),
+    editAvatarUrl: document.getElementById('editAvatarUrl'),
+
+    // Add Friend Modal Elements
+    addFriendModal: document.getElementById('addFriendModal'),
+    friendSearchInput: document.getElementById('friendSearchInput'),
+    searchFriendBtn: document.getElementById('searchFriendBtn'),
+    friendSearchResults: document.getElementById('friendSearchResults'),
 };
 
 // ============================================
@@ -623,7 +704,7 @@ function getFilteredPhotos(photos) {
     return filtered;
 }
 
-function renderGallery(galleryElement, photos) {
+function renderGallery(galleryElement, photos, showLoadMore = false, hasMore = false, loadMoreCallback = null) {
     const filtered = getFilteredPhotos(photos);
 
     if (filtered.length === 0) {
@@ -637,7 +718,7 @@ function renderGallery(galleryElement, photos) {
         return;
     }
 
-    galleryElement.innerHTML = filtered.map(photo => `
+    let html = filtered.map(photo => `
         <div class="gallery-item" data-photo-id="${photo.id}">
             <img src="${photo.url}" alt="Photo ${photo.id}" loading="lazy">
             <div class="gallery-overlay">
@@ -653,21 +734,59 @@ function renderGallery(galleryElement, photos) {
         </div>
     `).join('');
 
-    // Add click handlers
+    // Add load more button if there are more photos
+    if (showLoadMore && hasMore) {
+        html += `
+            <div class="load-more-container">
+                <button class="btn btn-secondary load-more-btn" id="loadMoreBtn">
+                    <i class="ph ph-arrow-down"></i>
+                    <span>더 보기</span>
+                </button>
+            </div>
+        `;
+    }
+
+    galleryElement.innerHTML = html;
+
+    // Add click handlers for photos
     galleryElement.querySelectorAll('.gallery-item').forEach(item => {
         item.addEventListener('click', () => {
             const photoId = item.dataset.photoId;
             openPhotoModal(photoId);
         });
     });
+
+    // Add click handler for load more button
+    if (showLoadMore && hasMore && loadMoreCallback) {
+        const loadMoreBtn = galleryElement.querySelector('.load-more-btn');
+        if (loadMoreBtn) {
+            loadMoreBtn.addEventListener('click', async () => {
+                loadMoreBtn.disabled = true;
+                loadMoreBtn.innerHTML = '<i class="ph-fill ph-circle-notch" style="animation: spin 1s linear infinite;"></i><span>로딩 중...</span>';
+                await loadMoreCallback();
+            });
+        }
+    }
 }
 
 function renderMyPhotos() {
-    renderGallery(elements.gallery, state.photos);
+    renderGallery(
+        elements.gallery,
+        state.photos,
+        true,
+        state.pagination.hasMoreMyPhotos,
+        () => loadPhotos(true)
+    );
 }
 
 function renderFriendPhotos() {
-    renderGallery(elements.friendsGallery, state.friendPhotos);
+    renderGallery(
+        elements.friendsGallery,
+        state.friendPhotos,
+        true,
+        state.pagination.hasMoreFriendPhotos,
+        () => loadFriendPhotos(true)
+    );
 }
 
 // ============================================
@@ -744,9 +863,57 @@ function openPhotoModal(photoId) {
     openModal(elements.photoModal);
 }
 
+async function handlePhotoDownload() {
+    const allPhotos = [...state.photos, ...state.friendPhotos];
+    const photo = allPhotos.find(p => p.id === state.currentPhotoId);
+
+    if (!photo) {
+        showToast('사진을 찾을 수 없습니다', 'error');
+        return;
+    }
+
+    showLoading('다운로드 준비 중...');
+
+    try {
+        // Fetch the image
+        const response = await fetch(photo.url);
+
+        if (!response.ok) {
+            throw new Error('Failed to fetch image');
+        }
+
+        const blob = await response.blob();
+
+        // Create download link
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+
+        // Generate filename from photo date and id
+        const dateStr = photo.date ? new Date(photo.date).toISOString().split('T')[0] : 'photo';
+        const extension = blob.type.split('/')[1] || 'jpg';
+        link.download = `platypus_${dateStr}_${photo.id.slice(0, 8)}.${extension}`;
+
+        // Trigger download
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        // Clean up
+        window.URL.revokeObjectURL(downloadUrl);
+
+        hideLoading();
+        showToast('사진이 다운로드되었습니다', 'success');
+    } catch (error) {
+        hideLoading();
+        console.error('Failed to download photo:', error);
+        showToast('다운로드에 실패했습니다', 'error');
+    }
+}
+
 function renderGroupToggles(photo) {
     elements.groupToggleList.innerHTML = state.groups.map(group => `
-        <div class="group-toggle-item ${photo.groupIds.includes(group.id) ? 'active' : ''}" 
+        <div class="group-toggle-item ${photo.groupIds.includes(group.id) ? 'active' : ''}"
              data-group-id="${group.id}">
             <span class="check"><i class="ph-bold ph-check"></i></span>
             <span>${group.name}</span>
@@ -1293,6 +1460,227 @@ function confirmRemoveFriend(friendId) {
 }
 
 // ============================================
+// Profile Edit Functions
+// ============================================
+async function openProfileEditModal() {
+    const profile = await getCurrentUserProfile();
+    const user = getCurrentUser();
+
+    if (!profile && !user) {
+        showToast('로그인이 필요합니다', 'error');
+        return;
+    }
+
+    // Pre-fill the form with current profile data
+    elements.editUsername.value = profile?.username || user?.user_metadata?.display_name || '';
+    elements.editUserId.value = profile?.user_id || user?.user_metadata?.username || '';
+    elements.editAvatarUrl.value = profile?.avatar_url || '';
+
+    openModal(elements.profileEditModal);
+}
+
+async function handleProfileEdit(e) {
+    e.preventDefault();
+
+    const user = getCurrentUser();
+    if (!user) {
+        showToast('로그인이 필요합니다', 'error');
+        return;
+    }
+
+    const username = elements.editUsername.value.trim();
+    const userId = elements.editUserId.value.trim();
+    const avatarUrl = elements.editAvatarUrl.value.trim();
+
+    // Validation
+    if (!username) {
+        showToast('사용자명을 입력해주세요', 'error');
+        return;
+    }
+
+    const userIdValidation = validateUsername(userId);
+    if (!userIdValidation.isValid) {
+        showToast(userIdValidation.errors[0], 'error');
+        return;
+    }
+
+    showLoading('프로필 저장 중...');
+
+    try {
+        const updates = {
+            username: username,
+            user_id: userId,
+        };
+
+        // Only include avatar_url if provided
+        if (avatarUrl) {
+            updates.avatar_url = avatarUrl;
+        }
+
+        await updateUserProfile(user.id, updates);
+
+        hideLoading();
+        closeModal(elements.profileEditModal);
+        showToast('프로필이 업데이트되었습니다', 'success');
+
+        // Update UI with new profile data
+        elements.userName.textContent = username;
+        elements.userId.textContent = `@${userId}`;
+
+        // Update avatar if URL provided
+        if (avatarUrl) {
+            const avatarElement = document.getElementById('userAvatar');
+            avatarElement.innerHTML = `<img src="${avatarUrl}" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+        }
+    } catch (error) {
+        hideLoading();
+        console.error('Failed to update profile:', error);
+        showToast('프로필 업데이트에 실패했습니다', 'error');
+    }
+}
+
+// ============================================
+// Friend Search & Add Functions
+// ============================================
+function openAddFriendModal() {
+    elements.friendSearchInput.value = '';
+    elements.friendSearchResults.innerHTML = `
+        <div class="search-results-empty">
+            <i class="ph ph-users"></i>
+            <p>사용자명 또는 ID를 입력하여 친구를 검색하세요</p>
+        </div>
+    `;
+    openModal(elements.addFriendModal);
+    elements.friendSearchInput.focus();
+}
+
+async function handleFriendSearch() {
+    const searchTerm = elements.friendSearchInput.value.trim();
+
+    if (!searchTerm) {
+        showToast('검색어를 입력해주세요', 'warning');
+        return;
+    }
+
+    if (searchTerm.length < 2) {
+        showToast('2자 이상 입력해주세요', 'warning');
+        return;
+    }
+
+    const user = getCurrentUser();
+    if (!user) {
+        showToast('로그인이 필요합니다', 'error');
+        return;
+    }
+
+    elements.friendSearchResults.innerHTML = `
+        <div class="search-results-empty">
+            <i class="ph-fill ph-circle-notch" style="animation: spin 1s linear infinite;"></i>
+            <p>검색 중...</p>
+        </div>
+    `;
+
+    try {
+        const results = await searchUsers(searchTerm);
+
+        // Filter out current user and existing friends
+        const friendIds = state.friends.map(f => f.id);
+        const filteredResults = results.filter(u => u.id !== user.id);
+
+        if (filteredResults.length === 0) {
+            elements.friendSearchResults.innerHTML = `
+                <div class="search-results-empty">
+                    <i class="ph ph-user-minus"></i>
+                    <p>검색 결과가 없습니다</p>
+                </div>
+            `;
+            return;
+        }
+
+        elements.friendSearchResults.innerHTML = filteredResults.map(u => {
+            const isFriend = friendIds.includes(u.id);
+            return `
+                <div class="search-result-item" data-user-id="${u.id}">
+                    <div class="search-result-avatar">${getInitials(u.name)}</div>
+                    <div class="search-result-info">
+                        <div class="search-result-name">${u.name}</div>
+                        <div class="search-result-id">@${u.username}</div>
+                    </div>
+                    ${isFriend
+                        ? `<button class="btn btn-secondary added" disabled>
+                            <i class="ph ph-check"></i>
+                            <span>친구</span>
+                           </button>`
+                        : `<button class="btn btn-primary add-friend-btn" data-user-id="${u.id}" data-user-name="${u.name}">
+                            <i class="ph ph-user-plus"></i>
+                            <span>추가</span>
+                           </button>`
+                    }
+                </div>
+            `;
+        }).join('');
+
+        // Add click handlers for add friend buttons
+        elements.friendSearchResults.querySelectorAll('.add-friend-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const userId = btn.dataset.userId;
+                const userName = btn.dataset.userName;
+                await addFriend(userId, userName, btn);
+            });
+        });
+    } catch (error) {
+        console.error('Failed to search users:', error);
+        elements.friendSearchResults.innerHTML = `
+            <div class="search-results-empty">
+                <i class="ph ph-warning"></i>
+                <p>검색 중 오류가 발생했습니다</p>
+            </div>
+        `;
+        showToast('검색에 실패했습니다', 'error');
+    }
+}
+
+async function addFriend(friendId, friendName, buttonElement) {
+    const user = getCurrentUser();
+    if (!user) {
+        showToast('로그인이 필요합니다', 'error');
+        return;
+    }
+
+    // Disable button while processing
+    buttonElement.disabled = true;
+    buttonElement.innerHTML = '<i class="ph-fill ph-circle-notch" style="animation: spin 1s linear infinite;"></i>';
+
+    try {
+        await apiAddFriend(user.id, friendId);
+
+        // Update button to show added state
+        buttonElement.classList.remove('btn-primary');
+        buttonElement.classList.add('btn-secondary', 'added');
+        buttonElement.innerHTML = '<i class="ph ph-check"></i><span>친구</span>';
+
+        // Reload friends list
+        await loadFriends();
+        await loadFriendPhotos();
+
+        // Update friend count
+        elements.friendCount.textContent = state.friends.length;
+
+        showToast(`${friendName}님을 친구로 추가했습니다`, 'success');
+    } catch (error) {
+        console.error('Failed to add friend:', error);
+        buttonElement.disabled = false;
+        buttonElement.innerHTML = '<i class="ph ph-user-plus"></i><span>추가</span>';
+
+        if (error.message === 'Already friends') {
+            showToast('이미 친구입니다', 'warning');
+        } else {
+            showToast('친구 추가에 실패했습니다', 'error');
+        }
+    }
+}
+
+// ============================================
 // Search & Filters
 // ============================================
 function toggleSearchBar() {
@@ -1396,9 +1784,7 @@ function setupEventListeners() {
     elements.importPhotosBtn.addEventListener('click', importSelectedPhotos);
 
     // Photo modal buttons
-    elements.downloadPhotoBtn.addEventListener('click', () => {
-        showToast('다운로드 기능은 백엔드 연결 후 사용 가능합니다', 'info');
-    });
+    elements.downloadPhotoBtn.addEventListener('click', handlePhotoDownload);
 
     elements.deletePhotoBtn.addEventListener('click', () => {
         if (state.currentPhotoId) {
@@ -1453,13 +1839,18 @@ function setupEventListeners() {
     // Account
     elements.logoutBtn.addEventListener('click', handleLogout);
 
-    elements.addFriendBtn.addEventListener('click', () => {
-        showToast('친구 추가 기능은 백엔드 연결 후 사용 가능합니다', 'info');
+    elements.addFriendBtn.addEventListener('click', openAddFriendModal);
+
+    // Add Friend Modal
+    elements.searchFriendBtn.addEventListener('click', handleFriendSearch);
+    elements.friendSearchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleFriendSearch();
     });
 
-    elements.editProfileBtn.addEventListener('click', () => {
-        showToast('프로필 수정 기능은 백엔드 연결 후 사용 가능합니다', 'info');
-    });
+    elements.editProfileBtn.addEventListener('click', openProfileEditModal);
+
+    // Profile Edit Modal
+    elements.profileEditForm.addEventListener('submit', handleProfileEdit);
 
     // Keyboard shortcuts
     setupKeyboardShortcuts();

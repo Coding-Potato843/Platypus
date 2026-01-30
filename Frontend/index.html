@@ -462,6 +462,88 @@
         </div>
     </div>
 
+    <!-- Add Friend Modal -->
+    <div class="modal" id="addFriendModal">
+        <div class="modal-overlay" data-close-modal></div>
+        <div class="modal-content add-friend-modal-content">
+            <div class="modal-header">
+                <h2>
+                    <i class="ph ph-user-plus"></i>
+                    친구 추가
+                </h2>
+                <button class="modal-close" data-close-modal aria-label="닫기">
+                    <i class="ph ph-x"></i>
+                </button>
+            </div>
+            <div class="add-friend-body">
+                <div class="search-friend-form">
+                    <div class="input-wrapper">
+                        <i class="ph ph-magnifying-glass"></i>
+                        <input type="text" id="friendSearchInput" placeholder="사용자명 또는 ID로 검색..." autocomplete="off">
+                    </div>
+                    <button type="button" class="btn btn-primary" id="searchFriendBtn">
+                        <i class="ph ph-magnifying-glass"></i>
+                        <span>검색</span>
+                    </button>
+                </div>
+                <div class="friend-search-results" id="friendSearchResults">
+                    <div class="search-results-empty">
+                        <i class="ph ph-users"></i>
+                        <p>사용자명 또는 ID를 입력하여 친구를 검색하세요</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile Edit Modal -->
+    <div class="modal" id="profileEditModal">
+        <div class="modal-overlay" data-close-modal></div>
+        <div class="modal-content profile-edit-modal-content">
+            <div class="modal-header">
+                <h2>
+                    <i class="ph ph-user-circle"></i>
+                    프로필 수정
+                </h2>
+                <button class="modal-close" data-close-modal aria-label="닫기">
+                    <i class="ph ph-x"></i>
+                </button>
+            </div>
+            <form id="profileEditForm" class="profile-edit-form">
+                <div class="form-group">
+                    <label for="editUsername">사용자명</label>
+                    <div class="input-wrapper">
+                        <i class="ph ph-user"></i>
+                        <input type="text" id="editUsername" placeholder="사용자명" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="editUserId">사용자 ID</label>
+                    <div class="input-wrapper">
+                        <i class="ph ph-at"></i>
+                        <input type="text" id="editUserId" placeholder="사용자 ID (영문, 숫자, _)" required>
+                    </div>
+                    <span class="input-hint">3-20자, 영문/숫자/밑줄만 사용 가능</span>
+                </div>
+                <div class="form-group">
+                    <label for="editAvatarUrl">프로필 이미지 URL (선택)</label>
+                    <div class="input-wrapper">
+                        <i class="ph ph-image"></i>
+                        <input type="url" id="editAvatarUrl" placeholder="https://example.com/avatar.jpg">
+                    </div>
+                    <span class="input-hint">외부 이미지 URL을 입력하세요</span>
+                </div>
+                <div class="modal-footer profile-edit-footer">
+                    <button type="button" class="btn btn-secondary" data-close-modal>취소</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="ph ph-check"></i>
+                        <span>저장</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Confirm Modal -->
     <div class="modal" id="confirmModal">
         <div class="modal-overlay" data-close-modal></div>
