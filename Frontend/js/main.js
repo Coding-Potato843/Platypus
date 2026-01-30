@@ -383,6 +383,19 @@ const elements = {
     friendSearchInput: document.getElementById('friendSearchInput'),
     searchFriendBtn: document.getElementById('searchFriendBtn'),
     friendSearchResults: document.getElementById('friendSearchResults'),
+
+    // Auth Page Elements (Landing Page)
+    authPage: document.getElementById('authPage'),
+    appContainer: document.getElementById('app'),
+    authPageTabs: document.querySelectorAll('.auth-form-tab'),
+    authPageLoginForm: document.getElementById('authPageLoginForm'),
+    authPageSignupForm: document.getElementById('authPageSignupForm'),
+    authLoginEmail: document.getElementById('authLoginEmail'),
+    authLoginPassword: document.getElementById('authLoginPassword'),
+    authSignupEmail: document.getElementById('authSignupEmail'),
+    authSignupUsername: document.getElementById('authSignupUsername'),
+    authSignupPassword: document.getElementById('authSignupPassword'),
+    authSignupPasswordConfirm: document.getElementById('authSignupPasswordConfirm'),
 };
 
 // ============================================
@@ -606,6 +619,11 @@ async function handleLogout() {
         await logout();
         hideLoading();
         showToast('로그아웃되었습니다.', 'success');
+
+        // Show auth page, hide app
+        elements.authPage.style.display = 'flex';
+        elements.appContainer.style.display = 'none';
+
         updateUIForUnauthenticatedUser();
     } catch (error) {
         hideLoading();
@@ -614,6 +632,10 @@ async function handleLogout() {
 }
 
 async function updateUIForAuthenticatedUser() {
+    // Hide auth page, show app
+    elements.authPage.style.display = 'none';
+    elements.appContainer.style.display = 'block';
+
     // Get user profile from database
     const profile = await getCurrentUserProfile();
     const user = getCurrentUser();
@@ -653,8 +675,9 @@ async function updateUIForAuthenticatedUser() {
 }
 
 function updateUIForUnauthenticatedUser() {
-    // Show login modal
-    openAuthModal();
+    // Show auth page, hide app
+    elements.authPage.style.display = 'flex';
+    elements.appContainer.style.display = 'none';
 
     // Reset account info
     elements.userName.textContent = '-';
@@ -665,6 +688,115 @@ function updateUIForUnauthenticatedUser() {
     elements.photoCount.textContent = '0';
     elements.friendCount.textContent = '0';
     elements.storageUsed.textContent = '0 MB';
+}
+
+// ============================================
+// Auth Page Functions (Landing Page)
+// ============================================
+function switchAuthPageTab(tabName) {
+    // Update tab buttons
+    elements.authPageTabs.forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.authPageTab === tabName);
+    });
+
+    // Update forms
+    if (tabName === 'login') {
+        elements.authPageLoginForm.classList.add('active');
+        elements.authPageSignupForm.classList.remove('active');
+    } else {
+        elements.authPageLoginForm.classList.remove('active');
+        elements.authPageSignupForm.classList.add('active');
+    }
+}
+
+async function handleAuthPageLogin(e) {
+    e.preventDefault();
+
+    const email = elements.authLoginEmail.value.trim();
+    const password = elements.authLoginPassword.value;
+
+    // Validation
+    if (!validateEmail(email)) {
+        showToast('올바른 이메일 형식을 입력해주세요.', 'error');
+        return;
+    }
+
+    if (!password) {
+        showToast('비밀번호를 입력해주세요.', 'error');
+        return;
+    }
+
+    showLoading('로그인 중...');
+
+    try {
+        const user = await login(email, password);
+        hideLoading();
+        showToast(`환영합니다!`, 'success');
+
+        // Show app, hide auth page
+        elements.authPage.style.display = 'none';
+        elements.appContainer.style.display = 'block';
+
+        await updateUIForAuthenticatedUser();
+    } catch (error) {
+        hideLoading();
+        if (error instanceof AuthError) {
+            showToast(error.message, 'error');
+        } else {
+            showToast('로그인 중 오류가 발생했습니다.', 'error');
+        }
+    }
+}
+
+async function handleAuthPageSignup(e) {
+    e.preventDefault();
+
+    const email = elements.authSignupEmail.value.trim();
+    const username = elements.authSignupUsername.value.trim();
+    const password = elements.authSignupPassword.value;
+    const passwordConfirm = elements.authSignupPasswordConfirm.value;
+
+    // Validation
+    if (!validateEmail(email)) {
+        showToast('올바른 이메일 형식을 입력해주세요.', 'error');
+        return;
+    }
+
+    const usernameValidation = validateUsername(username);
+    if (!usernameValidation.isValid) {
+        showToast(usernameValidation.errors[0], 'error');
+        return;
+    }
+
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.isValid) {
+        showToast(passwordValidation.errors[0], 'error');
+        return;
+    }
+
+    if (password !== passwordConfirm) {
+        showToast('비밀번호가 일치하지 않습니다.', 'error');
+        return;
+    }
+
+    showLoading('회원가입 중...');
+
+    try {
+        const user = await register(email, password, username, username);
+        hideLoading();
+        showToast('회원가입이 완료되었습니다! 이메일을 확인해주세요.', 'success');
+
+        // Switch to login tab
+        switchAuthPageTab('login');
+        elements.authLoginEmail.value = email;
+    } catch (error) {
+        hideLoading();
+        if (error instanceof AuthError) {
+            showToast(error.message, 'error');
+        } else {
+            showToast('회원가입 중 오류가 발생했습니다.', 'error');
+        }
+    }
 }
 
 // ============================================
@@ -1855,13 +1987,21 @@ function setupEventListeners() {
     // Keyboard shortcuts
     setupKeyboardShortcuts();
 
-    // Auth Modal
+    // Auth Modal (for in-app auth if needed)
     elements.authTabs.forEach(tab => {
         tab.addEventListener('click', () => switchAuthTab(tab.dataset.authTab));
     });
 
     elements.loginForm.addEventListener('submit', handleLogin);
     elements.signupForm.addEventListener('submit', handleSignup);
+
+    // Auth Page (Landing Page)
+    elements.authPageTabs.forEach(tab => {
+        tab.addEventListener('click', () => switchAuthPageTab(tab.dataset.authPageTab));
+    });
+
+    elements.authPageLoginForm.addEventListener('submit', handleAuthPageLogin);
+    elements.authPageSignupForm.addEventListener('submit', handleAuthPageSignup);
 }
 
 // ============================================
@@ -1877,6 +2017,9 @@ async function init() {
     onAuthStateChange(async (event, session) => {
         console.log('Auth state changed:', event);
         if (event === 'SIGNED_IN' && session?.user) {
+            // Hide auth page, show app
+            elements.authPage.style.display = 'none';
+            elements.appContainer.style.display = 'block';
             await updateUIForAuthenticatedUser();
         } else if (event === 'SIGNED_OUT') {
             updateUIForUnauthenticatedUser();
@@ -1889,12 +2032,15 @@ async function init() {
     hideLoading();
 
     if (hasSession) {
-        // User is logged in
+        // User is logged in - show app
+        elements.authPage.style.display = 'none';
+        elements.appContainer.style.display = 'block';
         await updateUIForAuthenticatedUser();
         showToast('Platypus에 오신 것을 환영합니다!', 'success');
     } else {
-        // User is not logged in - show auth modal
-        openAuthModal();
+        // User is not logged in - show auth page (landing page)
+        elements.authPage.style.display = 'flex';
+        elements.appContainer.style.display = 'none';
     }
 
     // Render initial content (with mock data for now)
