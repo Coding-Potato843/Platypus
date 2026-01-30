@@ -3,6 +3,26 @@
  * Main JavaScript Module
  */
 
+import { initAuth, login, register, logout, isAuthenticated, getCurrentUser, getCurrentUserProfile, onAuthStateChange, validateEmail, validatePassword, validateUsername, AuthError } from './services/auth.js';
+import {
+    supabase,
+    getPhotos,
+    getPhoto,
+    uploadPhoto,
+    uploadPhotos,
+    deletePhoto,
+    updatePhotoGroups,
+    getGroups,
+    createGroup as apiCreateGroup,
+    updateGroup as apiUpdateGroup,
+    deleteGroup as apiDeleteGroup,
+    getFriends,
+    getFriendsPhotos,
+    removeFriend as apiRemoveFriend,
+    getUserStats,
+    ApiError
+} from './services/api.js';
+
 // ============================================
 // Mock Data (Replace with API calls)
 // ============================================
@@ -52,11 +72,106 @@ const mockFriends = [
 ];
 
 // ============================================
+// Data Loading Functions (Supabase)
+// ============================================
+
+/**
+ * Load user's photos from Supabase
+ */
+async function loadPhotos() {
+    const user = getCurrentUser();
+    if (!user) return;
+
+    try {
+        const photos = await getPhotos(user.id);
+        state.photos = photos;
+        renderMyPhotos();
+    } catch (error) {
+        console.error('Failed to load photos:', error);
+        // Keep mock data as fallback
+    }
+}
+
+/**
+ * Load user's groups from Supabase
+ */
+async function loadGroups() {
+    const user = getCurrentUser();
+    if (!user) return;
+
+    try {
+        const groups = await getGroups(user.id);
+        if (groups.length > 0) {
+            state.groups = groups;
+            updateGroupChips();
+        }
+    } catch (error) {
+        console.error('Failed to load groups:', error);
+        // Keep mock data as fallback
+    }
+}
+
+/**
+ * Load friends' photos from Supabase
+ */
+async function loadFriendPhotos() {
+    const user = getCurrentUser();
+    if (!user) return;
+
+    try {
+        const photos = await getFriendsPhotos(user.id);
+        state.friendPhotos = photos;
+        renderFriendPhotos();
+    } catch (error) {
+        console.error('Failed to load friend photos:', error);
+        // Keep mock data as fallback
+    }
+}
+
+/**
+ * Load friends list from Supabase
+ */
+async function loadFriends() {
+    const user = getCurrentUser();
+    if (!user) return;
+
+    try {
+        const friends = await getFriends(user.id);
+        state.friends = friends;
+        renderFriendsList();
+    } catch (error) {
+        console.error('Failed to load friends:', error);
+        // Keep mock data as fallback
+    }
+}
+
+/**
+ * Load all user data from Supabase
+ */
+async function loadAllUserData() {
+    showLoading('데이터 로딩 중...');
+
+    try {
+        await Promise.all([
+            loadPhotos(),
+            loadGroups(),
+            loadFriendPhotos(),
+            loadFriends(),
+        ]);
+    } catch (error) {
+        console.error('Failed to load user data:', error);
+    } finally {
+        hideLoading();
+    }
+}
+
+// ============================================
 // State Management
 // ============================================
 const state = {
     photos: [...mockPhotos],
     friendPhotos: [...mockFriendPhotos],
+    friends: [...mockFriends],
     groups: [
         { id: 'favorites', name: '즐겨찾기' },
         { id: 'travel', name: '여행' },
@@ -175,6 +290,18 @@ const elements = {
     // Other
     loadingOverlay: document.getElementById('loadingOverlay'),
     toastContainer: document.getElementById('toastContainer'),
+
+    // Auth Modal Elements
+    authModal: document.getElementById('authModal'),
+    authTabs: document.querySelectorAll('.auth-tab'),
+    loginForm: document.getElementById('loginForm'),
+    signupForm: document.getElementById('signupForm'),
+    loginEmail: document.getElementById('loginEmail'),
+    loginPassword: document.getElementById('loginPassword'),
+    signupEmail: document.getElementById('signupEmail'),
+    signupUsername: document.getElementById('signupUsername'),
+    signupPassword: document.getElementById('signupPassword'),
+    signupPasswordConfirm: document.getElementById('signupPasswordConfirm'),
 };
 
 // ============================================
@@ -276,6 +403,188 @@ document.querySelectorAll('[data-close-modal]').forEach(el => {
         if (modal) closeModal(modal);
     });
 });
+
+// ============================================
+// Auth Modal Functions
+// ============================================
+function openAuthModal() {
+    openModal(elements.authModal);
+}
+
+function closeAuthModal() {
+    closeModal(elements.authModal);
+    // Reset forms
+    elements.loginForm.reset();
+    elements.signupForm.reset();
+}
+
+function switchAuthTab(tabName) {
+    // Update tab buttons
+    elements.authTabs.forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.authTab === tabName);
+    });
+
+    // Update forms
+    if (tabName === 'login') {
+        elements.loginForm.classList.add('active');
+        elements.signupForm.classList.remove('active');
+    } else {
+        elements.loginForm.classList.remove('active');
+        elements.signupForm.classList.add('active');
+    }
+}
+
+async function handleLogin(e) {
+    e.preventDefault();
+
+    const email = elements.loginEmail.value.trim();
+    const password = elements.loginPassword.value;
+
+    // Validation
+    if (!validateEmail(email)) {
+        showToast('올바른 이메일 형식을 입력해주세요.', 'error');
+        return;
+    }
+
+    if (!password) {
+        showToast('비밀번호를 입력해주세요.', 'error');
+        return;
+    }
+
+    showLoading('로그인 중...');
+
+    try {
+        const user = await login(email, password);
+        hideLoading();
+        closeAuthModal();
+        showToast(`환영합니다, ${user.email}!`, 'success');
+        await updateUIForAuthenticatedUser();
+    } catch (error) {
+        hideLoading();
+        if (error instanceof AuthError) {
+            showToast(error.message, 'error');
+        } else {
+            showToast('로그인 중 오류가 발생했습니다.', 'error');
+        }
+    }
+}
+
+async function handleSignup(e) {
+    e.preventDefault();
+
+    const email = elements.signupEmail.value.trim();
+    const username = elements.signupUsername.value.trim();
+    const password = elements.signupPassword.value;
+    const passwordConfirm = elements.signupPasswordConfirm.value;
+
+    // Validation
+    if (!validateEmail(email)) {
+        showToast('올바른 이메일 형식을 입력해주세요.', 'error');
+        return;
+    }
+
+    const usernameValidation = validateUsername(username);
+    if (!usernameValidation.isValid) {
+        showToast(usernameValidation.errors[0], 'error');
+        return;
+    }
+
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.isValid) {
+        showToast(passwordValidation.errors[0], 'error');
+        return;
+    }
+
+    if (password !== passwordConfirm) {
+        showToast('비밀번호가 일치하지 않습니다.', 'error');
+        return;
+    }
+
+    showLoading('회원가입 중...');
+
+    try {
+        const user = await register(email, password, username, username);
+        hideLoading();
+        closeAuthModal();
+        showToast('회원가입이 완료되었습니다! 이메일을 확인해주세요.', 'success');
+        // Note: Supabase may require email confirmation before login
+    } catch (error) {
+        hideLoading();
+        if (error instanceof AuthError) {
+            showToast(error.message, 'error');
+        } else {
+            showToast('회원가입 중 오류가 발생했습니다.', 'error');
+        }
+    }
+}
+
+async function handleLogout() {
+    showLoading('로그아웃 중...');
+
+    try {
+        await logout();
+        hideLoading();
+        showToast('로그아웃되었습니다.', 'success');
+        updateUIForUnauthenticatedUser();
+    } catch (error) {
+        hideLoading();
+        showToast('로그아웃 중 오류가 발생했습니다.', 'error');
+    }
+}
+
+async function updateUIForAuthenticatedUser() {
+    // Get user profile from database
+    const profile = await getCurrentUserProfile();
+    const user = getCurrentUser();
+
+    if (profile) {
+        elements.userName.textContent = profile.username || user.email;
+        elements.userId.textContent = profile.user_id ? `@${profile.user_id}` : '';
+        elements.userEmail.textContent = user.email;
+        elements.joinDate.textContent = `가입일: ${formatDate(profile.created_at || user.created_at)}`;
+        elements.lastSync.textContent = profile.last_sync_at
+            ? `마지막 동기화: ${formatDateTime(profile.last_sync_at)}`
+            : '마지막 동기화: 없음';
+    } else {
+        // Fallback to auth user data
+        elements.userName.textContent = user.user_metadata?.display_name || user.email;
+        elements.userId.textContent = user.user_metadata?.username ? `@${user.user_metadata.username}` : '';
+        elements.userEmail.textContent = user.email;
+        elements.joinDate.textContent = `가입일: ${formatDate(user.created_at)}`;
+        elements.lastSync.textContent = '마지막 동기화: 없음';
+    }
+
+    // Load user stats from Supabase
+    try {
+        const stats = await getUserStats(user.id);
+        elements.photoCount.textContent = stats.photoCount;
+        elements.friendCount.textContent = stats.friendCount;
+        elements.storageUsed.textContent = stats.storageUsed;
+    } catch (error) {
+        console.error('Failed to load stats:', error);
+        elements.photoCount.textContent = '0';
+        elements.friendCount.textContent = '0';
+        elements.storageUsed.textContent = '0 MB';
+    }
+
+    // Load all user data from Supabase
+    await loadAllUserData();
+}
+
+function updateUIForUnauthenticatedUser() {
+    // Show login modal
+    openAuthModal();
+
+    // Reset account info
+    elements.userName.textContent = '-';
+    elements.userId.textContent = '';
+    elements.userEmail.textContent = '-';
+    elements.joinDate.textContent = '가입일: -';
+    elements.lastSync.textContent = '마지막 동기화: -';
+    elements.photoCount.textContent = '0';
+    elements.friendCount.textContent = '0';
+    elements.storageUsed.textContent = '0 MB';
+}
 
 // ============================================
 // Photo Rendering
@@ -453,10 +762,11 @@ function renderGroupToggles(photo) {
     });
 }
 
-function togglePhotoGroup(photoId, groupId) {
+async function togglePhotoGroup(photoId, groupId) {
     const photo = state.photos.find(p => p.id === photoId);
     if (!photo) return;
 
+    // Update local state first for responsiveness
     const index = photo.groupIds.indexOf(groupId);
     if (index > -1) {
         photo.groupIds.splice(index, 1);
@@ -470,7 +780,22 @@ function togglePhotoGroup(photoId, groupId) {
     // Re-render gallery (in case filtering is active)
     renderMyPhotos();
 
-    showToast('그룹이 업데이트되었습니다', 'success');
+    // Update in database
+    try {
+        await updatePhotoGroups(photoId, photo.groupIds);
+        showToast('그룹이 업데이트되었습니다', 'success');
+    } catch (error) {
+        console.error('Failed to update photo groups:', error);
+        // Revert on failure
+        if (index > -1) {
+            photo.groupIds.push(groupId);
+        } else {
+            photo.groupIds.splice(photo.groupIds.indexOf(groupId), 1);
+        }
+        renderGroupToggles(photo);
+        renderMyPhotos();
+        showToast('그룹 업데이트에 실패했습니다', 'error');
+    }
 }
 
 // ============================================
@@ -643,7 +968,7 @@ function startEditGroup(groupId) {
     });
 }
 
-function saveGroupEdit(groupId, newName) {
+async function saveGroupEdit(groupId, newName) {
     const trimmedName = newName.trim();
 
     if (!trimmedName) {
@@ -651,18 +976,28 @@ function saveGroupEdit(groupId, newName) {
         return;
     }
 
+    const user = getCurrentUser();
+    if (!user) return;
+
     const group = state.groups.find(g => g.id === groupId);
     if (!group) return;
 
-    group.name = trimmedName;
+    try {
+        await apiUpdateGroup(groupId, user.id, trimmedName);
+        group.name = trimmedName;
 
-    renderGroupList();
-    updateGroupChips();
+        renderGroupList();
+        updateGroupChips();
 
-    showToast('그룹 이름이 수정되었습니다', 'success');
+        showToast('그룹 이름이 수정되었습니다', 'success');
+    } catch (error) {
+        console.error('Failed to update group:', error);
+        showToast('그룹 수정에 실패했습니다', 'error');
+        renderGroupList(); // Revert UI
+    }
 }
 
-function createGroup() {
+async function createGroup() {
     const name = elements.newGroupName.value.trim();
 
     if (!name) {
@@ -670,14 +1005,25 @@ function createGroup() {
         return;
     }
 
-    const id = name.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now();
-    state.groups.push({ id, name });
+    const user = getCurrentUser();
+    if (!user) {
+        showToast('로그인이 필요합니다', 'error');
+        return;
+    }
 
-    elements.newGroupName.value = '';
-    renderGroupList();
-    updateGroupChips();
+    try {
+        const newGroup = await apiCreateGroup(user.id, name);
+        state.groups.push(newGroup);
 
-    showToast('새 그룹이 생성되었습니다', 'success');
+        elements.newGroupName.value = '';
+        renderGroupList();
+        updateGroupChips();
+
+        showToast('새 그룹이 생성되었습니다', 'success');
+    } catch (error) {
+        console.error('Failed to create group:', error);
+        showToast('그룹 생성에 실패했습니다', 'error');
+    }
 }
 
 function confirmDeleteGroup(groupId) {
@@ -687,31 +1033,41 @@ function confirmDeleteGroup(groupId) {
     elements.confirmTitle.textContent = '그룹 삭제';
     elements.confirmMessage.textContent = `"${group.name}" 그룹을 삭제하시겠습니까? 사진에서 이 그룹 지정이 해제됩니다.`;
 
-    elements.confirmActionBtn.onclick = () => {
-        deleteGroup(groupId);
+    elements.confirmActionBtn.onclick = async () => {
+        await deleteGroupHandler(groupId);
         closeModal(elements.confirmModal);
     };
 
     openModal(elements.confirmModal);
 }
 
-function deleteGroup(groupId) {
-    // Remove group from list
-    state.groups = state.groups.filter(g => g.id !== groupId);
+async function deleteGroupHandler(groupId) {
+    const user = getCurrentUser();
+    if (!user) return;
 
-    // Remove group from all photos
-    state.photos.forEach(photo => {
-        photo.groupIds = photo.groupIds.filter(id => id !== groupId);
-    });
+    try {
+        await apiDeleteGroup(groupId, user.id);
 
-    renderGroupList();
-    updateGroupChips();
+        // Remove group from list
+        state.groups = state.groups.filter(g => g.id !== groupId);
 
-    if (state.currentGroup === groupId) {
-        filterByGroup('all');
+        // Remove group from all photos in state
+        state.photos.forEach(photo => {
+            photo.groupIds = photo.groupIds.filter(id => id !== groupId);
+        });
+
+        renderGroupList();
+        updateGroupChips();
+
+        if (state.currentGroup === groupId) {
+            filterByGroup('all');
+        }
+
+        showToast('그룹이 삭제되었습니다', 'success');
+    } catch (error) {
+        console.error('Failed to delete group:', error);
+        showToast('그룹 삭제에 실패했습니다', 'error');
     }
-
-    showToast('그룹이 삭제되었습니다', 'success');
 }
 
 function updateGroupChips() {
@@ -878,7 +1234,7 @@ function renderAccountInfo() {
 }
 
 function renderFriendsList() {
-    if (mockFriends.length === 0) {
+    if (state.friends.length === 0) {
         elements.friendsList.innerHTML = `
             <div class="gallery-empty">
                 <i class="ph ph-users"></i>
@@ -888,7 +1244,7 @@ function renderFriendsList() {
         return;
     }
 
-    elements.friendsList.innerHTML = mockFriends.map(friend => `
+    elements.friendsList.innerHTML = state.friends.map(friend => `
         <div class="friend-item" data-friend-id="${friend.id}">
             <div class="friend-avatar">${getInitials(friend.name)}</div>
             <div class="friend-info">
@@ -911,15 +1267,25 @@ function renderFriendsList() {
 }
 
 function confirmRemoveFriend(friendId) {
-    const friend = mockFriends.find(f => f.id === friendId);
+    const friend = state.friends.find(f => f.id === friendId);
     if (!friend) return;
 
     elements.confirmTitle.textContent = '친구 삭제';
     elements.confirmMessage.textContent = `${friend.name}님을 친구에서 삭제하시겠습니까?`;
 
-    elements.confirmActionBtn.onclick = () => {
-        // In real app, make API call here
-        showToast('친구가 삭제되었습니다', 'success');
+    elements.confirmActionBtn.onclick = async () => {
+        const user = getCurrentUser();
+        if (!user) return;
+
+        try {
+            await apiRemoveFriend(user.id, friendId);
+            state.friends = state.friends.filter(f => f.id !== friendId);
+            renderFriendsList();
+            showToast('친구가 삭제되었습니다', 'success');
+        } catch (error) {
+            console.error('Failed to remove friend:', error);
+            showToast('친구 삭제에 실패했습니다', 'error');
+        }
         closeModal(elements.confirmModal);
     };
 
@@ -1039,12 +1405,22 @@ function setupEventListeners() {
             elements.confirmTitle.textContent = '사진 삭제';
             elements.confirmMessage.textContent = '이 사진을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.';
 
-            elements.confirmActionBtn.onclick = () => {
-                state.photos = state.photos.filter(p => p.id !== state.currentPhotoId);
-                closeModal(elements.confirmModal);
-                closeModal(elements.photoModal);
-                renderMyPhotos();
-                showToast('사진이 삭제되었습니다', 'success');
+            elements.confirmActionBtn.onclick = async () => {
+                const user = getCurrentUser();
+                if (!user) return;
+
+                try {
+                    await deletePhoto(state.currentPhotoId, user.id);
+                    state.photos = state.photos.filter(p => p.id !== state.currentPhotoId);
+                    closeModal(elements.confirmModal);
+                    closeModal(elements.photoModal);
+                    renderMyPhotos();
+                    showToast('사진이 삭제되었습니다', 'success');
+                } catch (error) {
+                    console.error('Failed to delete photo:', error);
+                    closeModal(elements.confirmModal);
+                    showToast('사진 삭제에 실패했습니다', 'error');
+                }
             };
 
             openModal(elements.confirmModal);
@@ -1075,9 +1451,7 @@ function setupEventListeners() {
     });
 
     // Account
-    elements.logoutBtn.addEventListener('click', () => {
-        showToast('로그아웃 기능은 백엔드 연결 후 사용 가능합니다', 'info');
-    });
+    elements.logoutBtn.addEventListener('click', handleLogout);
 
     elements.addFriendBtn.addEventListener('click', () => {
         showToast('친구 추가 기능은 백엔드 연결 후 사용 가능합니다', 'info');
@@ -1089,24 +1463,52 @@ function setupEventListeners() {
 
     // Keyboard shortcuts
     setupKeyboardShortcuts();
+
+    // Auth Modal
+    elements.authTabs.forEach(tab => {
+        tab.addEventListener('click', () => switchAuthTab(tab.dataset.authTab));
+    });
+
+    elements.loginForm.addEventListener('submit', handleLogin);
+    elements.signupForm.addEventListener('submit', handleSignup);
 }
 
 // ============================================
 // Initialize App
 // ============================================
-function init() {
+async function init() {
     console.log('🎉 Platypus App Initialized');
 
     // Setup event listeners
     setupEventListeners();
 
-    // Render initial content
+    // Setup auth state change listener
+    onAuthStateChange(async (event, session) => {
+        console.log('Auth state changed:', event);
+        if (event === 'SIGNED_IN' && session?.user) {
+            await updateUIForAuthenticatedUser();
+        } else if (event === 'SIGNED_OUT') {
+            updateUIForUnauthenticatedUser();
+        }
+    });
+
+    // Check existing session
+    showLoading('로딩 중...');
+    const hasSession = await initAuth();
+    hideLoading();
+
+    if (hasSession) {
+        // User is logged in
+        await updateUIForAuthenticatedUser();
+        showToast('Platypus에 오신 것을 환영합니다!', 'success');
+    } else {
+        // User is not logged in - show auth modal
+        openAuthModal();
+    }
+
+    // Render initial content (with mock data for now)
     renderMyPhotos();
     renderFriendPhotos();
-    renderAccountInfo();
-
-    // Show welcome toast
-    showToast('Platypus에 오신 것을 환영합니다! 🎉', 'success');
 }
 
 // Start the app when DOM is ready

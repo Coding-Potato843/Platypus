@@ -16,15 +16,28 @@ Platypus is a photo sharing and organization web application that allows users t
 > Note: The original plan was React + Chakra UI, but the implementation uses vanilla JavaScript for simplicity and performance.
 
 ### Backend & Infrastructure
-- **Database**: Supabase (Free Plan)
+- **Backend**: Supabase (Free Plan) - 프론트엔드에서 직접 연결
   - PostgreSQL database
   - Real-time subscriptions
   - Row Level Security (RLS) for data protection
   - Built-in authentication
-- **Server/Hosting**: Render
+  - Storage for photo uploads
+- **Frontend Hosting**: Render (Static Site)
   - Free tier available
   - Auto-deploy from Git
   - SSL certificates included
+
+### Architecture (Serverless)
+```
+┌─────────────────┐      supabase-js      ┌─────────────────┐
+│  Render         │ ───────────────────► │  Supabase       │
+│  (Static Site)  │   Direct Connection   │  (Backend)      │
+│  - HTML/CSS/JS  │                       │  - Database     │
+│  - Frontend     │                       │  - Auth         │
+└─────────────────┘                       │  - Storage      │
+                                          └─────────────────┘
+```
+> Note: 별도의 Node.js 서버 없이 프론트엔드에서 Supabase에 직접 연결하는 서버리스 아키텍처
 
 ---
 
@@ -410,38 +423,63 @@ create trigger on_auth_user_created
 
 ---
 
-## API Endpoints (Render Backend)
+## Supabase API Usage
 
-### Authentication
-- `POST /auth/register` - Register new user
-- `POST /auth/login` - Login user
-- `POST /auth/logout` - Logout user
-- `POST /auth/refresh` - Refresh access token
+프론트엔드에서 Supabase 클라이언트를 직접 사용합니다.
 
-### Photos
-- `GET /photos` - Get user's photos (supports query params: groupId, location, startDate, endDate, limit, offset)
-- `POST /photos` - Upload new photo(s)
-- `GET /photos/:id` - Get single photo
-- `DELETE /photos/:id` - Delete photo
-- `PUT /photos/:id/groups` - Update photo's groups
-- `POST /photos/sync` - Sync selected photos from device
+### Supabase Client 설정 (api.js)
+```javascript
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 
-### Groups
-- `GET /groups` - Get user's groups
-- `POST /groups` - Create new group
-- `PUT /groups/:id` - Update group name
-- `DELETE /groups/:id` - Delete group
+const SUPABASE_URL = 'https://vtpgatnkobvjqwvoqtad.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...';
 
-### Friends
-- `GET /friends` - Get user's friends
-- `GET /friends/photos` - Get friends' photos
-- `POST /friends/:userId` - Add friend
-- `DELETE /friends/:userId` - Remove friend
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+```
 
-### User
-- `GET /user/profile` - Get current user profile
-- `PUT /user/profile` - Update profile
-- `POST /user/sync` - Update last sync timestamp
+### Authentication (Supabase Auth)
+```javascript
+// 회원가입
+const { data, error } = await supabase.auth.signUp({ email, password });
+
+// 로그인
+const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+// 로그아웃
+const { error } = await supabase.auth.signOut();
+
+// 현재 사용자
+const { data: { user } } = await supabase.auth.getUser();
+```
+
+### Database Queries
+```javascript
+// 사진 조회
+const { data, error } = await supabase.from('photos').select('*').eq('user_id', userId);
+
+// 사진 추가
+const { data, error } = await supabase.from('photos').insert({ url, user_id, location });
+
+// 그룹 조회
+const { data, error } = await supabase.from('groups').select('*').eq('user_id', userId);
+
+// 친구 목록 조회
+const { data, error } = await supabase
+  .from('friendships')
+  .select('friend_id, users!friendships_friend_id_fkey(username, user_id, avatar_url)')
+  .eq('user_id', userId);
+```
+
+### Storage (Photo Upload)
+```javascript
+// 사진 업로드
+const { data, error } = await supabase.storage
+  .from('photos')
+  .upload(`${userId}/${fileName}`, file);
+
+// 공개 URL 가져오기
+const { data } = supabase.storage.from('photos').getPublicUrl(filePath);
+```
 
 ---
 
@@ -449,7 +487,7 @@ create trigger on_auth_user_created
 
 ```
 Project_02_Platypus/
-├── Frontend/
+├── Frontend/                    # Render Static Site로 배포
 │   ├── index.html
 │   ├── css/
 │   │   └── styles.css
@@ -461,44 +499,60 @@ Project_02_Platypus/
 │       │   ├── modals.js
 │       │   └── tabs.js
 │       └── services/
-│           ├── api.js
+│           ├── api.js           # Supabase 클라이언트 설정 포함
 │           └── auth.js
-├── Backend/
-│   ├── server.js
-│   ├── routes/
-│   ├── controllers/
-│   └── middleware/
 ├── CLAUDE.md
-└── todo list.txt
+└── 클로드.md
 ```
+
+> Note: 별도의 Backend 폴더 없음 - Supabase가 백엔드 역할 수행
 
 ---
 
-## Environment Variables
+## Supabase Configuration
 
-### Frontend
-```
-SUPABASE_URL=your_supabase_url
-SUPABASE_ANON_KEY=your_supabase_anon_key
-API_BASE_URL=your_render_api_url
+### 현재 설정 (api.js에 직접 작성)
+```javascript
+const SUPABASE_URL = 'https://vtpgatnkobvjqwvoqtad.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ0cGdhdG5rb2J2anF3dm9xdGFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3NzQxNzIsImV4cCI6MjA4NTM1MDE3Mn0.Tc_lFbbkBrUusy2fI4XpNwxTXTGI2qfksU82y6AFyAQ';
 ```
 
-### Backend (Render)
-```
-DATABASE_URL=your_supabase_connection_string
-JWT_SECRET=your_jwt_secret
-SUPABASE_URL=your_supabase_url
-SUPABASE_SERVICE_KEY=your_supabase_service_key
-```
+> **보안 참고**: `anon key`는 공개되어도 안전합니다. Supabase의 Row Level Security(RLS)가 데이터를 보호합니다. 비밀로 유지해야 하는 키는 `service_role key`입니다.
+
+### Supabase Dashboard
+- **URL**: https://supabase.com/dashboard/project/vtpgatnkobvjqwvoqtad
+- **Settings > API**: URL 및 키 확인 가능
+
+---
+
+## Render Deployment (Static Site)
+
+### 배포 설정
+| 항목 | 설정값 |
+|------|--------|
+| **Type** | Static Site |
+| **Branch** | main |
+| **Build Command** | (비워두기) |
+| **Publish Directory** | `Frontend` |
+| **Environment Variables** | (비워두기 - 코드에 직접 설정) |
+
+### 배포 단계
+1. Render 대시보드에서 **New +** → **Static Site** 선택
+2. GitHub 레포지토리 연결
+3. 위 설정 입력
+4. **Create Static Site** 클릭
+
+### 자동 배포
+- GitHub main 브랜치에 푸시하면 자동으로 재배포됩니다
 
 ---
 
 ## Notes
 
-- The reference implementation in `Google_AI_Studio/` uses mock data - actual implementation should connect to Supabase
-- Photo storage can use Supabase Storage or external services like Cloudinary
+- Photo storage uses Supabase Storage
 - Consider implementing pagination for large photo libraries
 - Friend photo sharing requires proper privacy controls via Supabase RLS
+- `anon key`는 클라이언트에 노출되어도 안전 (RLS가 보호)
 
 ---
 

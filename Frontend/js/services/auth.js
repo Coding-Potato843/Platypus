@@ -1,61 +1,83 @@
 /**
  * Auth Service
- * Handles authentication and session management
+ * Handles authentication using Supabase Auth
  */
 
-// Auth Configuration
-const AUTH_CONFIG = {
-    tokenKey: 'auth_token',
-    userKey: 'auth_user',
-    refreshTokenKey: 'refresh_token',
-};
+import { supabase } from './api.js';
 
 // Current user state
 let currentUser = null;
 
 /**
- * Initialize auth from stored session
+ * Initialize auth - check for existing session
  */
-export function initAuth() {
-    const storedUser = localStorage.getItem(AUTH_CONFIG.userKey);
-    const storedToken = localStorage.getItem(AUTH_CONFIG.tokenKey);
+export async function initAuth() {
+    try {
+        const { data: { session }, error } = await supabase.auth.getSession();
 
-    if (storedUser && storedToken) {
-        try {
-            currentUser = JSON.parse(storedUser);
-            return true;
-        } catch (e) {
-            clearAuth();
+        if (error) {
+            console.error('Session error:', error);
             return false;
         }
-    }
 
-    return false;
+        if (session?.user) {
+            currentUser = session.user;
+            return true;
+        }
+
+        return false;
+    } catch (error) {
+        console.error('Init auth error:', error);
+        return false;
+    }
 }
 
 /**
  * Register new user
  */
-export async function register(email, password, username) {
+export async function register(email, password, username, displayName) {
     try {
-        const response = await fetch('/auth/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password, username }),
+        // 1. Sign up with Supabase Auth
+        const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+                data: {
+                    username: username,
+                    display_name: displayName || username,
+                }
+            }
         });
 
-        if (!response.ok) {
-            const error = await response.json();
-            throw new AuthError(error.message || '회원가입에 실패했습니다.');
+        if (error) {
+            throw new AuthError(error.message);
         }
 
-        const data = await response.json();
-        setSession(data.user, data.token, data.refreshToken);
+        if (!data.user) {
+            throw new AuthError('회원가입에 실패했습니다.');
+        }
 
+        // 2. Create user profile in public.users table
+        const { error: profileError } = await supabase
+            .from('users')
+            .insert({
+                id: data.user.id,
+                email: email,
+                username: displayName || username,
+                user_id: username,
+            });
+
+        if (profileError) {
+            console.error('Profile creation error:', profileError);
+            // Don't throw - auth succeeded, profile can be created later
+        }
+
+        currentUser = data.user;
         return data.user;
+
     } catch (error) {
         if (error instanceof AuthError) throw error;
-        throw new AuthError('회원가입 중 오류가 발생했습니다.');
+        throw new AuthError(error.message || '회원가입 중 오류가 발생했습니다.');
     }
 }
 
@@ -64,24 +86,28 @@ export async function register(email, password, username) {
  */
 export async function login(email, password) {
     try {
-        const response = await fetch('/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password }),
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
         });
 
-        if (!response.ok) {
-            const error = await response.json();
-            throw new AuthError(error.message || '로그인에 실패했습니다.');
+        if (error) {
+            if (error.message.includes('Invalid login credentials')) {
+                throw new AuthError('이메일 또는 비밀번호가 올바르지 않습니다.');
+            }
+            throw new AuthError(error.message);
         }
 
-        const data = await response.json();
-        setSession(data.user, data.token, data.refreshToken);
+        if (!data.user) {
+            throw new AuthError('로그인에 실패했습니다.');
+        }
 
+        currentUser = data.user;
         return data.user;
+
     } catch (error) {
         if (error instanceof AuthError) throw error;
-        throw new AuthError('로그인 중 오류가 발생했습니다.');
+        throw new AuthError(error.message || '로그인 중 오류가 발생했습니다.');
     }
 }
 
@@ -90,57 +116,15 @@ export async function login(email, password) {
  */
 export async function logout() {
     try {
-        const token = getToken();
+        const { error } = await supabase.auth.signOut();
 
-        if (token) {
-            await fetch('/auth/logout', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                },
-            });
+        if (error) {
+            console.error('Logout error:', error);
         }
     } catch (error) {
         console.error('Logout error:', error);
     } finally {
-        clearAuth();
-    }
-}
-
-/**
- * Refresh access token
- */
-export async function refreshToken() {
-    const refreshToken = localStorage.getItem(AUTH_CONFIG.refreshTokenKey);
-
-    if (!refreshToken) {
-        throw new AuthError('리프레시 토큰이 없습니다.');
-    }
-
-    try {
-        const response = await fetch('/auth/refresh', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refreshToken }),
-        });
-
-        if (!response.ok) {
-            clearAuth();
-            throw new AuthError('세션이 만료되었습니다. 다시 로그인해주세요.');
-        }
-
-        const data = await response.json();
-        localStorage.setItem(AUTH_CONFIG.tokenKey, data.token);
-
-        if (data.refreshToken) {
-            localStorage.setItem(AUTH_CONFIG.refreshTokenKey, data.refreshToken);
-        }
-
-        return data.token;
-    } catch (error) {
-        clearAuth();
-        throw new AuthError('세션이 만료되었습니다. 다시 로그인해주세요.');
+        currentUser = null;
     }
 }
 
@@ -148,7 +132,7 @@ export async function refreshToken() {
  * Check if user is authenticated
  */
 export function isAuthenticated() {
-    return !!getToken() && !!currentUser;
+    return !!currentUser;
 }
 
 /**
@@ -159,43 +143,42 @@ export function getCurrentUser() {
 }
 
 /**
- * Get auth token
+ * Get current user's profile from database
  */
-export function getToken() {
-    return localStorage.getItem(AUTH_CONFIG.tokenKey);
-}
+export async function getCurrentUserProfile() {
+    if (!currentUser) return null;
 
-/**
- * Set session data
- */
-function setSession(user, token, refreshToken = null) {
-    currentUser = user;
-    localStorage.setItem(AUTH_CONFIG.userKey, JSON.stringify(user));
-    localStorage.setItem(AUTH_CONFIG.tokenKey, token);
+    try {
+        const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', currentUser.id)
+            .single();
 
-    if (refreshToken) {
-        localStorage.setItem(AUTH_CONFIG.refreshTokenKey, refreshToken);
+        if (error) {
+            console.error('Profile fetch error:', error);
+            return null;
+        }
+
+        return data;
+    } catch (error) {
+        console.error('Profile fetch error:', error);
+        return null;
     }
 }
 
 /**
- * Clear authentication data
+ * Listen for auth state changes
  */
-function clearAuth() {
-    currentUser = null;
-    localStorage.removeItem(AUTH_CONFIG.tokenKey);
-    localStorage.removeItem(AUTH_CONFIG.userKey);
-    localStorage.removeItem(AUTH_CONFIG.refreshTokenKey);
-}
-
-/**
- * Update current user data
- */
-export function updateCurrentUser(updates) {
-    if (currentUser) {
-        currentUser = { ...currentUser, ...updates };
-        localStorage.setItem(AUTH_CONFIG.userKey, JSON.stringify(currentUser));
-    }
+export function onAuthStateChange(callback) {
+    return supabase.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_IN' && session?.user) {
+            currentUser = session.user;
+        } else if (event === 'SIGNED_OUT') {
+            currentUser = null;
+        }
+        callback(event, session);
+    });
 }
 
 /**
@@ -269,37 +252,6 @@ export function validateUsername(username) {
 }
 
 // ============================================
-// Auth Guard for protected routes/actions
-// ============================================
-
-/**
- * Auth guard - redirects to login if not authenticated
- */
-export function requireAuth(redirectUrl = '/login') {
-    if (!isAuthenticated()) {
-        // Store intended destination
-        sessionStorage.setItem('auth_redirect', window.location.href);
-        window.location.href = redirectUrl;
-        return false;
-    }
-    return true;
-}
-
-/**
- * Handle post-login redirect
- */
-export function handleLoginRedirect() {
-    const redirect = sessionStorage.getItem('auth_redirect');
-    sessionStorage.removeItem('auth_redirect');
-
-    if (redirect) {
-        window.location.href = redirect;
-    } else {
-        window.location.href = '/';
-    }
-}
-
-// ============================================
 // Export all
 // ============================================
 
@@ -308,15 +260,12 @@ export default {
     register,
     login,
     logout,
-    refreshToken,
     isAuthenticated,
     getCurrentUser,
-    getToken,
-    updateCurrentUser,
+    getCurrentUserProfile,
+    onAuthStateChange,
     AuthError,
     validatePassword,
     validateEmail,
     validateUsername,
-    requireAuth,
-    handleLoginRedirect,
 };

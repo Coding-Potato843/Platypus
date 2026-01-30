@@ -14,73 +14,6 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // Supabase Client
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// ============================================
-// Legacy API Configuration (for gradual migration)
-// ============================================
-const API_CONFIG = {
-    baseUrl: '', // Will be set from environment
-    timeout: 30000,
-};
-
-/**
- * Initialize API with configuration
- */
-export function initApi(config = {}) {
-    Object.assign(API_CONFIG, config);
-}
-
-/**
- * Get full API URL
- */
-function getUrl(endpoint) {
-    return `${API_CONFIG.baseUrl}${endpoint}`;
-}
-
-/**
- * Get auth headers
- */
-function getAuthHeaders() {
-    const token = localStorage.getItem('auth_token');
-    return token ? { 'Authorization': `Bearer ${token}` } : {};
-}
-
-/**
- * Make API request
- */
-async function request(endpoint, options = {}) {
-    const url = getUrl(endpoint);
-
-    const config = {
-        method: options.method || 'GET',
-        headers: {
-            'Content-Type': 'application/json',
-            ...getAuthHeaders(),
-            ...options.headers,
-        },
-        ...options,
-    };
-
-    if (options.body && typeof options.body === 'object') {
-        config.body = JSON.stringify(options.body);
-    }
-
-    try {
-        const response = await fetch(url, config);
-
-        if (!response.ok) {
-            const error = await response.json().catch(() => ({}));
-            throw new ApiError(response.status, error.message || 'API request failed');
-        }
-
-        return await response.json();
-    } catch (error) {
-        if (error instanceof ApiError) {
-            throw error;
-        }
-        throw new ApiError(0, error.message || 'Network error');
-    }
-}
-
 /**
  * Custom API Error
  */
@@ -109,189 +42,576 @@ export class ApiError extends Error {
 }
 
 // ============================================
-// Photo API
+// Photo API (Supabase)
 // ============================================
 
 /**
- * Get user's photos
+ * Get user's photos from Supabase
  */
-export async function getPhotos(params = {}) {
-    const queryParams = new URLSearchParams();
+export async function getPhotos(userId, params = {}) {
+    let query = supabase
+        .from('photos')
+        .select(`
+            *,
+            photo_groups (group_id)
+        `)
+        .eq('user_id', userId)
+        .order('date_taken', { ascending: false });
 
-    if (params.groupId) queryParams.append('groupId', params.groupId);
-    if (params.location) queryParams.append('location', params.location);
-    if (params.startDate) queryParams.append('startDate', params.startDate);
-    if (params.endDate) queryParams.append('endDate', params.endDate);
-    if (params.limit) queryParams.append('limit', params.limit);
-    if (params.offset) queryParams.append('offset', params.offset);
+    // Filter by location (partial match)
+    if (params.location) {
+        query = query.ilike('location', `%${params.location}%`);
+    }
 
-    const query = queryParams.toString();
-    return request(`/photos${query ? `?${query}` : ''}`);
+    // Filter by date range
+    if (params.startDate) {
+        query = query.gte('date_taken', params.startDate);
+    }
+    if (params.endDate) {
+        query = query.lte('date_taken', params.endDate);
+    }
+
+    // Pagination
+    if (params.limit) {
+        query = query.limit(params.limit);
+    }
+    if (params.offset) {
+        query = query.range(params.offset, params.offset + (params.limit || 50) - 1);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+        throw new ApiError(500, error.message);
+    }
+
+    // Transform data to include groupIds array
+    return data.map(photo => ({
+        id: photo.id,
+        url: photo.url,
+        date: photo.date_taken,
+        location: photo.location || '알 수 없음',
+        groupIds: photo.photo_groups?.map(pg => pg.group_id) || [],
+        author: null, // Own photos have no author
+    }));
 }
 
 /**
- * Get single photo by ID
+ * Get single photo by ID from Supabase
  */
 export async function getPhoto(photoId) {
-    return request(`/photos/${photoId}`);
+    const { data, error } = await supabase
+        .from('photos')
+        .select(`
+            *,
+            photo_groups (group_id)
+        `)
+        .eq('id', photoId)
+        .single();
+
+    if (error) {
+        throw new ApiError(error.code === 'PGRST116' ? 404 : 500, error.message);
+    }
+
+    return {
+        id: data.id,
+        url: data.url,
+        date: data.date_taken,
+        location: data.location || '알 수 없음',
+        groupIds: data.photo_groups?.map(pg => pg.group_id) || [],
+        author: null,
+    };
 }
 
 /**
- * Upload photos
+ * Upload photo to Supabase Storage and create record
  */
-export async function uploadPhotos(photos) {
-    const formData = new FormData();
+export async function uploadPhoto(userId, file, metadata = {}) {
+    // Generate unique filename
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${userId}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
 
-    photos.forEach((photo, index) => {
-        formData.append(`photos[${index}]`, photo.file);
-        if (photo.location) formData.append(`locations[${index}]`, photo.location);
-        if (photo.date) formData.append(`dates[${index}]`, photo.date);
-    });
+    // Upload to Storage
+    const { error: uploadError } = await supabase.storage
+        .from('photos')
+        .upload(fileName, file);
 
-    return request('/photos', {
-        method: 'POST',
-        headers: {}, // Let browser set content-type for FormData
-        body: formData,
-    });
+    if (uploadError) {
+        throw new ApiError(500, `Upload failed: ${uploadError.message}`);
+    }
+
+    // Get public URL
+    const { data: urlData } = supabase.storage
+        .from('photos')
+        .getPublicUrl(fileName);
+
+    // Create photo record in database
+    const { data: photoData, error: dbError } = await supabase
+        .from('photos')
+        .insert({
+            user_id: userId,
+            url: urlData.publicUrl,
+            date_taken: metadata.date || new Date().toISOString(),
+            location: metadata.location || null,
+        })
+        .select()
+        .single();
+
+    if (dbError) {
+        // Rollback: delete uploaded file if DB insert fails
+        await supabase.storage.from('photos').remove([fileName]);
+        throw new ApiError(500, `Database error: ${dbError.message}`);
+    }
+
+    return {
+        id: photoData.id,
+        url: photoData.url,
+        date: photoData.date_taken,
+        location: photoData.location || '알 수 없음',
+        groupIds: [],
+        author: null,
+    };
 }
 
 /**
- * Delete photo
+ * Upload multiple photos
  */
-export async function deletePhoto(photoId) {
-    return request(`/photos/${photoId}`, { method: 'DELETE' });
+export async function uploadPhotos(userId, photos) {
+    const results = [];
+    const errors = [];
+
+    for (const photo of photos) {
+        try {
+            const result = await uploadPhoto(userId, photo.file, {
+                date: photo.date,
+                location: photo.location,
+            });
+            results.push(result);
+        } catch (error) {
+            errors.push({ file: photo.file.name, error: error.message });
+        }
+    }
+
+    return { uploaded: results, errors };
 }
 
 /**
- * Update photo's groups
+ * Delete photo from Supabase
+ */
+export async function deletePhoto(photoId, userId) {
+    // First get the photo to find the storage path
+    const { data: photo, error: fetchError } = await supabase
+        .from('photos')
+        .select('url')
+        .eq('id', photoId)
+        .eq('user_id', userId)
+        .single();
+
+    if (fetchError) {
+        throw new ApiError(404, 'Photo not found');
+    }
+
+    // Extract file path from URL
+    const urlParts = photo.url.split('/photos/');
+    const filePath = urlParts.length > 1 ? urlParts[1] : null;
+
+    // Delete from database (cascade will handle photo_groups)
+    const { error: dbError } = await supabase
+        .from('photos')
+        .delete()
+        .eq('id', photoId)
+        .eq('user_id', userId);
+
+    if (dbError) {
+        throw new ApiError(500, dbError.message);
+    }
+
+    // Delete from storage
+    if (filePath) {
+        await supabase.storage.from('photos').remove([filePath]);
+    }
+
+    return { success: true };
+}
+
+/**
+ * Update photo's groups in Supabase
  */
 export async function updatePhotoGroups(photoId, groupIds) {
-    return request(`/photos/${photoId}/groups`, {
-        method: 'PUT',
-        body: { groupIds },
-    });
+    // Delete existing group assignments
+    const { error: deleteError } = await supabase
+        .from('photo_groups')
+        .delete()
+        .eq('photo_id', photoId);
+
+    if (deleteError) {
+        throw new ApiError(500, deleteError.message);
+    }
+
+    // Insert new group assignments
+    if (groupIds.length > 0) {
+        const insertData = groupIds.map(groupId => ({
+            photo_id: photoId,
+            group_id: groupId,
+        }));
+
+        const { error: insertError } = await supabase
+            .from('photo_groups')
+            .insert(insertData);
+
+        if (insertError) {
+            throw new ApiError(500, insertError.message);
+        }
+    }
+
+    return { success: true };
 }
 
 // ============================================
-// Group API
+// Group API (Supabase)
 // ============================================
 
 /**
- * Get user's groups
+ * Get user's groups from Supabase
  */
-export async function getGroups() {
-    return request('/groups');
+export async function getGroups(userId) {
+    const { data, error } = await supabase
+        .from('groups')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: true });
+
+    if (error) {
+        throw new ApiError(500, error.message);
+    }
+
+    return data.map(group => ({
+        id: group.id,
+        name: group.name,
+    }));
 }
 
 /**
- * Create new group
+ * Create new group in Supabase
  */
-export async function createGroup(name) {
-    return request('/groups', {
-        method: 'POST',
-        body: { name },
-    });
+export async function createGroup(userId, name) {
+    const { data, error } = await supabase
+        .from('groups')
+        .insert({
+            user_id: userId,
+            name: name,
+        })
+        .select()
+        .single();
+
+    if (error) {
+        throw new ApiError(500, error.message);
+    }
+
+    return {
+        id: data.id,
+        name: data.name,
+    };
 }
 
 /**
- * Delete group
+ * Update group name in Supabase
  */
-export async function deleteGroup(groupId) {
-    return request(`/groups/${groupId}`, { method: 'DELETE' });
+export async function updateGroup(groupId, userId, name) {
+    const { data, error } = await supabase
+        .from('groups')
+        .update({ name })
+        .eq('id', groupId)
+        .eq('user_id', userId)
+        .select()
+        .single();
+
+    if (error) {
+        throw new ApiError(500, error.message);
+    }
+
+    return {
+        id: data.id,
+        name: data.name,
+    };
+}
+
+/**
+ * Delete group from Supabase
+ */
+export async function deleteGroup(groupId, userId) {
+    // photo_groups entries will be deleted by cascade or we delete them first
+    const { error: pgError } = await supabase
+        .from('photo_groups')
+        .delete()
+        .eq('group_id', groupId);
+
+    if (pgError) {
+        console.warn('Error deleting photo_groups:', pgError);
+    }
+
+    const { error } = await supabase
+        .from('groups')
+        .delete()
+        .eq('id', groupId)
+        .eq('user_id', userId);
+
+    if (error) {
+        throw new ApiError(500, error.message);
+    }
+
+    return { success: true };
 }
 
 // ============================================
-// Friends API
+// Friends API (Supabase)
 // ============================================
 
 /**
- * Get user's friends
+ * Get user's friends from Supabase
  */
-export async function getFriends() {
-    return request('/friends');
+export async function getFriends(userId) {
+    const { data, error } = await supabase
+        .from('friendships')
+        .select(`
+            friend_id,
+            users!friendships_friend_id_fkey (
+                id,
+                username,
+                user_id,
+                avatar_url
+            )
+        `)
+        .eq('user_id', userId);
+
+    if (error) {
+        throw new ApiError(500, error.message);
+    }
+
+    return data.map(f => ({
+        id: f.friend_id,
+        name: f.users?.username || 'Unknown',
+        username: f.users?.user_id || '',
+        avatar: f.users?.avatar_url || null,
+    }));
 }
 
 /**
- * Get friends' photos
+ * Get friends' photos from Supabase
  */
-export async function getFriendsPhotos(params = {}) {
-    const queryParams = new URLSearchParams();
+export async function getFriendsPhotos(userId, params = {}) {
+    // First get friend IDs
+    const { data: friendships, error: friendError } = await supabase
+        .from('friendships')
+        .select('friend_id')
+        .eq('user_id', userId);
 
-    if (params.limit) queryParams.append('limit', params.limit);
-    if (params.offset) queryParams.append('offset', params.offset);
+    if (friendError) {
+        throw new ApiError(500, friendError.message);
+    }
 
-    const query = queryParams.toString();
-    return request(`/friends/photos${query ? `?${query}` : ''}`);
+    const friendIds = friendships.map(f => f.friend_id);
+
+    if (friendIds.length === 0) {
+        return [];
+    }
+
+    // Then get their photos
+    let query = supabase
+        .from('photos')
+        .select(`
+            *,
+            users!photos_user_id_fkey (username)
+        `)
+        .in('user_id', friendIds)
+        .order('date_taken', { ascending: false });
+
+    if (params.limit) {
+        query = query.limit(params.limit);
+    }
+    if (params.offset) {
+        query = query.range(params.offset, params.offset + (params.limit || 50) - 1);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+        throw new ApiError(500, error.message);
+    }
+
+    return data.map(photo => ({
+        id: photo.id,
+        url: photo.url,
+        date: photo.date_taken,
+        location: photo.location || '알 수 없음',
+        groupIds: [],
+        author: photo.users?.username || 'Unknown',
+    }));
 }
 
 /**
- * Add friend
+ * Add friend in Supabase
  */
-export async function addFriend(userId) {
-    return request(`/friends/${userId}`, { method: 'POST' });
+export async function addFriend(userId, friendId) {
+    // Check if friend exists
+    const { data: friendUser, error: userError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', friendId)
+        .single();
+
+    if (userError || !friendUser) {
+        throw new ApiError(404, 'User not found');
+    }
+
+    // Check if already friends
+    const { data: existing } = await supabase
+        .from('friendships')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('friend_id', friendId)
+        .single();
+
+    if (existing) {
+        throw new ApiError(400, 'Already friends');
+    }
+
+    // Add friendship
+    const { error } = await supabase
+        .from('friendships')
+        .insert({
+            user_id: userId,
+            friend_id: friendId,
+        });
+
+    if (error) {
+        throw new ApiError(500, error.message);
+    }
+
+    return { success: true };
 }
 
 /**
- * Remove friend
+ * Search users by username or user_id
  */
-export async function removeFriend(userId) {
-    return request(`/friends/${userId}`, { method: 'DELETE' });
+export async function searchUsers(searchTerm) {
+    const { data, error } = await supabase
+        .from('users')
+        .select('id, username, user_id, avatar_url')
+        .or(`username.ilike.%${searchTerm}%,user_id.ilike.%${searchTerm}%`)
+        .limit(10);
+
+    if (error) {
+        throw new ApiError(500, error.message);
+    }
+
+    return data.map(user => ({
+        id: user.id,
+        name: user.username,
+        username: user.user_id,
+        avatar: user.avatar_url,
+    }));
+}
+
+/**
+ * Remove friend from Supabase
+ */
+export async function removeFriend(userId, friendId) {
+    const { error } = await supabase
+        .from('friendships')
+        .delete()
+        .eq('user_id', userId)
+        .eq('friend_id', friendId);
+
+    if (error) {
+        throw new ApiError(500, error.message);
+    }
+
+    return { success: true };
 }
 
 // ============================================
-// User API
+// User API (Supabase)
 // ============================================
 
 /**
- * Get current user profile
+ * Get user profile from Supabase
  */
-export async function getUserProfile() {
-    return request('/user/profile');
+export async function getUserProfile(userId) {
+    const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+    if (error) {
+        throw new ApiError(error.code === 'PGRST116' ? 404 : 500, error.message);
+    }
+
+    return data;
 }
 
 /**
- * Update user profile
+ * Update user profile in Supabase
  */
-export async function updateUserProfile(updates) {
-    return request('/user/profile', {
-        method: 'PUT',
-        body: updates,
-    });
+export async function updateUserProfile(userId, updates) {
+    const { data, error } = await supabase
+        .from('users')
+        .update(updates)
+        .eq('id', userId)
+        .select()
+        .single();
+
+    if (error) {
+        throw new ApiError(500, error.message);
+    }
+
+    return data;
 }
 
 /**
- * Update last sync time
+ * Update last sync time in Supabase
  */
-export async function updateLastSync() {
-    return request('/user/sync', { method: 'POST' });
-}
+export async function updateLastSync(userId) {
+    const { data, error } = await supabase
+        .from('users')
+        .update({ last_sync_at: new Date().toISOString() })
+        .eq('id', userId)
+        .select()
+        .single();
 
-// ============================================
-// Sync API
-// ============================================
+    if (error) {
+        throw new ApiError(500, error.message);
+    }
 
-/**
- * Get photos available for sync (from device)
- * This would typically interface with device APIs
- */
-export async function getDevicePhotos(lastSyncTime = null) {
-    // In a real implementation, this would:
-    // 1. Access device's photo library
-    // 2. Filter photos taken after lastSyncTime
-    // 3. Return photo metadata
-
-    // For now, return mock data
-    return Promise.resolve([]);
+    return data;
 }
 
 /**
- * Sync selected photos to server
+ * Get user stats (photo count, friend count, storage)
  */
-export async function syncPhotos(photoIds) {
-    return request('/photos/sync', {
-        method: 'POST',
-        body: { photoIds },
-    });
+export async function getUserStats(userId) {
+    // Get photo count
+    const { count: photoCount, error: photoError } = await supabase
+        .from('photos')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId);
+
+    // Get friend count
+    const { count: friendCount, error: friendError } = await supabase
+        .from('friendships')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId);
+
+    if (photoError || friendError) {
+        console.warn('Error fetching stats:', photoError, friendError);
+    }
+
+    return {
+        photoCount: photoCount || 0,
+        friendCount: friendCount || 0,
+        storageUsed: '계산 중...', // Storage calculation would require additional API
+    };
 }
 
 // ============================================
@@ -299,12 +619,13 @@ export async function syncPhotos(photoIds) {
 // ============================================
 
 export default {
-    initApi,
+    supabase,
     ApiError,
 
     // Photos
     getPhotos,
     getPhoto,
+    uploadPhoto,
     uploadPhotos,
     deletePhoto,
     updatePhotoGroups,
@@ -312,6 +633,7 @@ export default {
     // Groups
     getGroups,
     createGroup,
+    updateGroup,
     deleteGroup,
 
     // Friends
@@ -319,13 +641,11 @@ export default {
     getFriendsPhotos,
     addFriend,
     removeFriend,
+    searchUsers,
 
     // User
     getUserProfile,
     updateUserProfile,
     updateLastSync,
-
-    // Sync
-    getDevicePhotos,
-    syncPhotos,
+    getUserStats,
 };
