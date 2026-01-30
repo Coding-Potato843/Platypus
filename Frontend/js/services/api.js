@@ -71,12 +71,12 @@ export async function getPhotos(userId, params = {}) {
         query = query.lte('date_taken', params.endDate);
     }
 
-    // Pagination
-    if (params.limit) {
+    // Pagination - use range for offset+limit, otherwise just limit
+    if (params.offset !== undefined && params.offset > 0) {
+        const limit = params.limit || 50;
+        query = query.range(params.offset, params.offset + limit - 1);
+    } else if (params.limit) {
         query = query.limit(params.limit);
-    }
-    if (params.offset) {
-        query = query.range(params.offset, params.offset + (params.limit || 50) - 1);
     }
 
     const { data, error } = await query;
@@ -426,11 +426,12 @@ export async function getFriendsPhotos(userId, params = {}) {
         .in('user_id', friendIds)
         .order('date_taken', { ascending: false });
 
-    if (params.limit) {
+    // Pagination - use range for offset+limit, otherwise just limit
+    if (params.offset !== undefined && params.offset > 0) {
+        const limit = params.limit || 50;
+        query = query.range(params.offset, params.offset + limit - 1);
+    } else if (params.limit) {
         query = query.limit(params.limit);
-    }
-    if (params.offset) {
-        query = query.range(params.offset, params.offset + (params.limit || 50) - 1);
     }
 
     const { data, error } = await query;
