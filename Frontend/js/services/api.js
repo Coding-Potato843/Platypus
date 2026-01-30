@@ -3,7 +3,20 @@
  * Handles all API communication with the backend
  */
 
-// API Configuration
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+// ============================================
+// Supabase Configuration
+// ============================================
+const SUPABASE_URL = 'https://vtpgatnkobvjqwvoqtad.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ0cGdhdG5rb2J2anF3dm9xdGFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3NzQxNzIsImV4cCI6MjA4NTM1MDE3Mn0.Tc_lFbbkBrUusy2fI4XpNwxTXTGI2qfksU82y6AFyAQ';
+
+// Supabase Client
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ============================================
+// Legacy API Configuration (for gradual migration)
+// ============================================
 const API_CONFIG = {
     baseUrl: '', // Will be set from environment
     timeout: 30000,

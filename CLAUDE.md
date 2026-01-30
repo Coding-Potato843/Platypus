@@ -267,50 +267,146 @@ const SortMode = {
 
 ## Database Schema (Supabase)
 
-### Tables
+### Supabase 인증 구조
 
-#### users
-| Column | Type | Description |
-|--------|------|-------------|
-| id | uuid | Primary key |
-| email | text | User email |
-| username | text | Display name |
-| user_id | text | Unique @handle |
-| avatar_url | text | Profile image URL |
-| created_at | timestamp | Join date |
-| last_sync_at | timestamp | Last photo sync time |
+Supabase는 내장 인증 시스템을 제공하며, 두 개의 스키마를 사용합니다:
 
-#### photos
-| Column | Type | Description |
-|--------|------|-------------|
-| id | uuid | Primary key |
-| user_id | uuid | Foreign key to users |
-| url | text | Photo URL/path |
-| date_taken | timestamp | When photo was taken |
-| location | text | Location metadata |
-| created_at | timestamp | Upload timestamp |
+```
+Supabase 데이터베이스
+│
+├── auth (스키마) ← Supabase 자동 관리
+│   └── users ← 인증 정보 (이메일, 비밀번호 해시, 토큰 등)
+│
+└── public (스키마) ← 개발자가 직접 관리
+    ├── users ← 프로필 정보 (username, avatar 등)
+    ├── photos
+    ├── groups
+    ├── photo_groups
+    └── friendships
+```
 
-#### groups
-| Column | Type | Description |
-|--------|------|-------------|
-| id | uuid | Primary key |
-| user_id | uuid | Foreign key to users |
-| name | text | Group name |
-| created_at | timestamp | Creation timestamp |
+- `auth.users`: Supabase가 자동 생성/관리. 직접 수정 불가.
+- `public.users`: 앱에서 사용할 추가 사용자 정보 저장. `id`는 `auth.users.id`와 동일한 값 사용.
 
-#### photo_groups (junction table)
-| Column | Type | Description |
-|--------|------|-------------|
-| photo_id | uuid | Foreign key to photos |
-| group_id | uuid | Foreign key to groups |
+회원가입 시 `public.users`에 자동으로 레코드를 생성하려면 트리거 사용:
+```sql
+create or replace function public.handle_new_user()
+returns trigger as $$
+begin
+  insert into public.users (id, email)
+  values (new.id, new.email);
+  return new;
+end;
+$$ language plpgsql security definer;
 
-#### friendships
-| Column | Type | Description |
-|--------|------|-------------|
-| id | uuid | Primary key |
-| user_id | uuid | The user |
-| friend_id | uuid | The friend |
-| created_at | timestamp | When friendship was created |
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user();
+```
+
+---
+
+### Tables (총 5개)
+
+#### 1. users (사용자 프로필)
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | uuid | PRIMARY KEY | auth.users.id와 동일 |
+| email | text | UNIQUE, NOT NULL | 이메일 주소 |
+| username | text | NOT NULL | 표시 이름 |
+| user_id | text | UNIQUE, NOT NULL | 고유 핸들 (@username) |
+| avatar_url | text | NULL 허용 | 프로필 이미지 URL |
+| created_at | timestamp | DEFAULT now() | 가입 일시 |
+| last_sync_at | timestamp | NULL 허용 | 마지막 사진 동기화 시간 |
+
+#### 2. photos (사진)
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | uuid | PRIMARY KEY | 기본 키 |
+| user_id | uuid | FOREIGN KEY → users.id, NOT NULL | 소유자 |
+| url | text | NOT NULL | 사진 URL/경로 |
+| date_taken | timestamp | NULL 허용 | 촬영 일시 |
+| location | text | NULL 허용 | 위치 메타데이터 |
+| created_at | timestamp | DEFAULT now() | 업로드 일시 |
+
+#### 3. groups (그룹/앨범)
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | uuid | PRIMARY KEY | 기본 키 |
+| user_id | uuid | FOREIGN KEY → users.id, NOT NULL | 소유자 |
+| name | text | NOT NULL | 그룹 이름 |
+| created_at | timestamp | DEFAULT now() | 생성 일시 |
+
+#### 4. photo_groups (사진-그룹 연결, Junction Table)
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| photo_id | uuid | FOREIGN KEY → photos.id | 사진 ID |
+| group_id | uuid | FOREIGN KEY → groups.id | 그룹 ID |
+
+- **복합 기본 키**: `PRIMARY KEY (photo_id, group_id)`
+- 별도의 id 열 없음
+- 하나의 사진이 여러 그룹에 속할 수 있는 다대다(N:M) 관계
+
+#### 5. friendships (친구 관계)
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | uuid | PRIMARY KEY | 기본 키 |
+| user_id | uuid | FOREIGN KEY → users.id, NOT NULL | 사용자 |
+| friend_id | uuid | FOREIGN KEY → users.id, NOT NULL | 친구 |
+| created_at | timestamp | DEFAULT now() | 친구 추가 일시 |
+
+- **복합 고유 제약**: `UNIQUE (user_id, friend_id)` - 중복 친구 관계 방지
+
+---
+
+### 테이블 관계도 (ERD)
+
+```
+┌─────────────────┐
+│   auth.users    │ (Supabase 자동 관리)
+│─────────────────│
+│ id (PK)         │
+│ email           │
+│ encrypted_pwd   │
+└────────┬────────┘
+         │ 동일한 id 사용
+         ▼
+┌─────────────────┐
+│  public.users   │
+│─────────────────│
+│ id (PK/FK)      │───────────────────────────────┐
+│ email           │                               │
+│ username        │                               │
+│ user_id         │                               │
+│ avatar_url      │                               │
+│ created_at      │                               │
+│ last_sync_at    │                               │
+└────────┬────────┘                               │
+         │                                        │
+         │ 1:N                                    │ 1:N (자기참조)
+         ▼                                        ▼
+┌─────────────────┐                    ┌─────────────────┐
+│     photos      │                    │   friendships   │
+│─────────────────│                    │─────────────────│
+│ id (PK)         │                    │ id (PK)         │
+│ user_id (FK)    │                    │ user_id (FK)    │
+│ url             │                    │ friend_id (FK)  │
+│ date_taken      │                    │ created_at      │
+│ location        │                    └─────────────────┘
+│ created_at      │
+└────────┬────────┘
+         │
+         │ N:M
+         ▼
+┌─────────────────┐         ┌─────────────────┐
+│  photo_groups   │         │     groups      │
+│─────────────────│         │─────────────────│
+│ photo_id (PK/FK)│────────▶│ id (PK)         │
+│ group_id (PK/FK)│◀────────│ user_id (FK)    │
+└─────────────────┘         │ name            │
+                            │ created_at      │
+                            └─────────────────┘
+```
 
 ---
 
