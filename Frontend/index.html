@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Platypus - 사진 공유 및 정리 앱. 친구들과 사진을 공유하고, 그룹으로 정리하세요.">
+    <title>Platypus - Photo Sharing & Organization</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+
+<body>
+    <!-- App Container -->
+    <div id="app" class="app-container">
+
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <div class="logo-icon">
+                        <i class="ph-fill ph-bird"></i>
+                    </div>
+                    <h1 class="logo-text">Platypus</h1>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-icon" id="searchToggle" aria-label="검색">
+                        <i class="ph ph-magnifying-glass"></i>
+                    </button>
+                    <button class="btn btn-primary" id="syncBtn">
+                        <i class="ph ph-arrows-clockwise"></i>
+                        <span>사진 동기화</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Search Bar (Hidden by default) -->
+            <div class="search-bar" id="searchBar">
+                <div class="search-input-group">
+                    <label for="locationSearch">위치</label>
+                    <div class="search-input-wrapper">
+                        <i class="ph ph-magnifying-glass"></i>
+                        <input type="text" id="locationSearch" placeholder="위치로 검색..." class="search-input">
+                    </div>
+                </div>
+                <div class="date-filter">
+                    <div class="date-input-group">
+                        <label for="startDate">시작일</label>
+                        <input type="date" id="startDate" class="date-input">
+                    </div>
+                    <div class="date-input-group">
+                        <label for="endDate">종료일</label>
+                        <input type="date" id="endDate" class="date-input">
+                    </div>
+                </div>
+                <button class="btn btn-secondary btn-clear-filters" id="clearFilters">
+                    <i class="ph ph-x"></i>
+                    <span>필터 초기화</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Tab Navigation -->
+        <nav class="tab-nav">
+            <button class="tab-btn active" data-tab="my-photos">
+                <i class="ph ph-image-square"></i>
+                <span>내 사진</span>
+            </button>
+            <button class="tab-btn" data-tab="friends">
+                <i class="ph ph-users"></i>
+                <span>친구</span>
+            </button>
+            <button class="tab-btn" data-tab="account">
+                <i class="ph ph-user-circle"></i>
+                <span>계정</span>
+            </button>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+
+            <!-- My Photos Tab -->
+            <section class="tab-content active" id="my-photos">
+                <!-- Group Filter -->
+                <div class="group-filter-container">
+                    <div class="group-filter-scroll">
+                        <button class="group-chip active" data-group="all">
+                            <i class="ph ph-images"></i>
+                            <span>전체 사진</span>
+                        </button>
+                        <button class="group-chip" data-group="favorites">
+                            <i class="ph ph-heart"></i>
+                            <span>즐겨찾기</span>
+                        </button>
+                        <button class="group-chip" data-group="travel">
+                            <i class="ph ph-airplane"></i>
+                            <span>여행</span>
+                        </button>
+                        <button class="group-chip" data-group="family">
+                            <i class="ph ph-house"></i>
+                            <span>가족</span>
+                        </button>
+                        <button class="group-chip" data-group="food">
+                            <i class="ph ph-fork-knife"></i>
+                            <span>음식</span>
+                        </button>
+                    </div>
+                    <button class="btn btn-icon" id="manageGroupsBtn" aria-label="그룹 관리">
+                        <i class="ph ph-gear-six"></i>
+                    </button>
+                </div>
+
+                <!-- Photo Gallery -->
+                <div class="gallery" id="gallery">
+                    <!-- Photos will be dynamically rendered here -->
+                </div>
+            </section>
+
+            <!-- Friends Tab -->
+            <section class="tab-content" id="friends">
+                <div class="friends-header">
+                    <h2>친구 사진</h2>
+                    <p class="friends-subtitle">친구들이 공유한 사진들을 확인하세요</p>
+                </div>
+                <div class="gallery" id="friendsGallery">
+                    <!-- Friend photos will be dynamically rendered here -->
+                </div>
+            </section>
+
+            <!-- Account Tab -->
+            <section class="tab-content" id="account">
+                <div class="account-container">
+                    <!-- User Profile Card -->
+                    <div class="profile-card">
+                        <div class="profile-header">
+                            <div class="avatar" id="userAvatar">
+                                <i class="ph-fill ph-user"></i>
+                            </div>
+                            <div class="profile-info">
+                                <h2 class="profile-name" id="userName">사용자</h2>
+                                <span class="profile-id" id="userId">@username</span>
+                            </div>
+                            <button class="btn btn-secondary" id="editProfileBtn">
+                                <i class="ph ph-pencil-simple"></i>
+                                <span>프로필 수정</span>
+                            </button>
+                        </div>
+
+                        <div class="profile-details">
+                            <div class="detail-item">
+                                <i class="ph ph-envelope"></i>
+                                <span id="userEmail">email@example.com</span>
+                            </div>
+                            <div class="detail-item">
+                                <i class="ph ph-calendar"></i>
+                                <span id="joinDate">가입일: 2024년 1월 1일</span>
+                            </div>
+                            <div class="detail-item">
+                                <i class="ph ph-arrows-clockwise"></i>
+                                <span id="lastSync">마지막 동기화: 오늘</span>
+                            </div>
+                        </div>
+
+                        <div class="profile-stats">
+                            <div class="stat-item">
+                                <span class="stat-value" id="photoCount">0</span>
+                                <span class="stat-label">사진</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value" id="friendCount">0</span>
+                                <span class="stat-label">친구</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value" id="storageUsed">0 MB</span>
+                                <span class="stat-label">저장공간</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Friends List -->
+                    <div class="friends-list-section">
+                        <h3 class="section-title">
+                            <i class="ph ph-users"></i>
+                            <span>친구 목록</span>
+                        </h3>
+                        <div class="friends-list" id="friendsList">
+                            <!-- Friends will be dynamically rendered here -->
+                        </div>
+                    </div>
+
+                    <!-- Account Actions -->
+                    <div class="account-actions">
+                        <button class="btn btn-secondary btn-full" id="addFriendBtn">
+                            <i class="ph ph-user-plus"></i>
+                            <span>친구 추가</span>
+                        </button>
+                        <button class="btn btn-danger btn-full" id="logoutBtn">
+                            <i class="ph ph-sign-out"></i>
+                            <span>로그아웃</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Floating Action Button for Slideshow -->
+        <button class="fab" id="slideshowBtn" aria-label="슬라이드쇼 시작">
+            <i class="ph-fill ph-play"></i>
+        </button>
+
+    </div>
+
+    <!-- Photo Detail Modal -->
+    <div class="modal" id="photoModal">
+        <div class="modal-overlay" data-close-modal></div>
+        <div class="modal-content photo-modal-content">
+            <button class="modal-close" data-close-modal aria-label="닫기">
+                <i class="ph ph-x"></i>
+            </button>
+            <div class="photo-detail">
+                <div class="photo-view">
+                    <img src="" alt="Photo" id="modalPhoto">
+                </div>
+                <div class="photo-info">
+                    <div class="photo-meta">
+                        <div class="meta-item">
+                            <i class="ph ph-identification-card"></i>
+                            <span id="photoId">ID: ---</span>
+                        </div>
+                        <div class="meta-item">
+                            <i class="ph ph-calendar"></i>
+                            <span id="photoDate">날짜: ---</span>
+                        </div>
+                        <div class="meta-item">
+                            <i class="ph ph-map-pin"></i>
+                            <span id="photoLocation">위치: ---</span>
+                        </div>
+                        <div class="meta-item author-item" id="photoAuthorItem" style="display: none;">
+                            <i class="ph ph-user"></i>
+                            <span id="photoAuthor">작성자: ---</span>
+                        </div>
+                    </div>
+
+                    <div class="photo-groups-section">
+                        <h4>
+                            <i class="ph ph-folder"></i>
+                            그룹 지정
+                        </h4>
+                        <div class="group-toggle-list" id="groupToggleList">
+                            <!-- Group toggles will be rendered here -->
+                        </div>
+                    </div>
+
+                    <div class="photo-actions">
+                        <button class="btn btn-secondary" id="downloadPhotoBtn">
+                            <i class="ph ph-download-simple"></i>
+                            <span>다운로드</span>
+                        </button>
+                        <button class="btn btn-danger" id="deletePhotoBtn">
+                            <i class="ph ph-trash"></i>
+                            <span>삭제</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sync Modal -->
+    <div class="modal" id="syncModal">
+        <div class="modal-overlay" data-close-modal></div>
+        <div class="modal-content sync-modal-content">
+            <div class="modal-header">
+                <h2>
+                    <i class="ph ph-arrows-clockwise"></i>
+                    사진 동기화
+                </h2>
+                <button class="modal-close" data-close-modal aria-label="닫기">
+                    <i class="ph ph-x"></i>
+                </button>
+            </div>
+            <div class="sync-body">
+                <p class="sync-description">가져올 사진을 선택하세요</p>
+                <div class="sync-actions-top">
+                    <button class="btn btn-link" id="selectAllBtn">전체 선택</button>
+                    <button class="btn btn-link" id="deselectAllBtn">전체 해제</button>
+                </div>
+                <div class="sync-gallery" id="syncGallery">
+                    <!-- Sync preview photos will be rendered here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-close-modal>취소</button>
+                <button class="btn btn-primary" id="importPhotosBtn">
+                    <i class="ph ph-upload"></i>
+                    <span>선택한 사진 가져오기</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Group Management Modal -->
+    <div class="modal" id="groupModal">
+        <div class="modal-overlay" data-close-modal></div>
+        <div class="modal-content group-modal-content">
+            <div class="modal-header">
+                <h2>
+                    <i class="ph ph-folders"></i>
+                    그룹 관리
+                </h2>
+                <button class="modal-close" data-close-modal aria-label="닫기">
+                    <i class="ph ph-x"></i>
+                </button>
+            </div>
+            <div class="group-body">
+                <div class="new-group-form">
+                    <input type="text" id="newGroupName" placeholder="새 그룹 이름" class="input">
+                    <button class="btn btn-primary" id="createGroupBtn">
+                        <i class="ph ph-plus"></i>
+                        <span>생성</span>
+                    </button>
+                </div>
+                <div class="group-list" id="groupList">
+                    <!-- Groups will be rendered here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Slideshow Modal -->
+    <div class="slideshow-modal" id="slideshowModal">
+        <div class="slideshow-container">
+            <img src="" alt="Slideshow Photo" id="slideshowPhoto">
+            <div class="slideshow-info" id="slideshowInfo">
+                <div class="slideshow-location">
+                    <i class="ph ph-map-pin"></i>
+                    <span id="slideshowLocation">---</span>
+                </div>
+                <div class="slideshow-date">
+                    <i class="ph ph-calendar"></i>
+                    <span id="slideshowDate">---</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="slideshow-controls" id="slideshowControls">
+            <div class="slideshow-top-controls">
+                <button class="slideshow-close" id="closeSlideshowBtn" aria-label="닫기">
+                    <i class="ph ph-x"></i>
+                </button>
+            </div>
+
+            <div class="slideshow-nav-controls">
+                <button class="slideshow-nav-btn" id="prevSlideBtn" aria-label="이전">
+                    <i class="ph ph-caret-left"></i>
+                </button>
+                <button class="slideshow-play-btn" id="playPauseBtn" aria-label="재생/일시정지">
+                    <i class="ph-fill ph-play" id="playIcon"></i>
+                    <i class="ph-fill ph-pause" id="pauseIcon" style="display: none;"></i>
+                </button>
+                <button class="slideshow-nav-btn" id="nextSlideBtn" aria-label="다음">
+                    <i class="ph ph-caret-right"></i>
+                </button>
+            </div>
+
+            <div class="slideshow-bottom-controls">
+                <div class="slideshow-progress">
+                    <div class="progress-bar" id="slideshowProgressBar"></div>
+                </div>
+                <div class="slideshow-settings">
+                    <select id="sortModeSelect" class="slideshow-select">
+                        <option value="latest">최신순</option>
+                        <option value="chronological">시간순</option>
+                        <option value="random">랜덤</option>
+                    </select>
+                    <select id="slideshowGroupFilter" class="slideshow-select">
+                        <option value="all">전체 사진</option>
+                        <!-- Groups will be populated dynamically -->
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirm Modal -->
+    <div class="modal" id="confirmModal">
+        <div class="modal-overlay" data-close-modal></div>
+        <div class="modal-content confirm-modal-content">
+            <div class="confirm-icon">
+                <i class="ph ph-warning"></i>
+            </div>
+            <h3 id="confirmTitle">확인</h3>
+            <p id="confirmMessage">정말로 진행하시겠습니까?</p>
+            <div class="confirm-actions">
+                <button class="btn btn-secondary" data-close-modal>취소</button>
+                <button class="btn btn-danger" id="confirmActionBtn">확인</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast-container" id="toastContainer">
+        <!-- Toasts will be added here dynamically -->
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner">
+            <i class="ph-fill ph-circle-notch"></i>
+        </div>
+        <p class="loading-text">로딩 중...</p>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/main.js"></script>
+</body>
+
+</html>
