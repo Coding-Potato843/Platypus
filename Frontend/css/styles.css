@@ -1821,7 +1821,13 @@ body {
     }
 
     .photo-view {
-        min-height: 250px;
+        min-height: 200px;
+        max-height: 40vh;
+    }
+
+    .photo-info {
+        max-height: 45vh;
+        overflow-y: auto;
     }
 
     .fab {

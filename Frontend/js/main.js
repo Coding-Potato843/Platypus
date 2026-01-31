@@ -304,7 +304,6 @@ const elements = {
 
     // Photo Modal Elements
     modalPhoto: document.getElementById('modalPhoto'),
-    photoId: document.getElementById('photoId'),
     photoDate: document.getElementById('photoDate'),
     photoLocation: document.getElementById('photoLocation'),
     photoAuthorItem: document.getElementById('photoAuthorItem'),
@@ -1040,7 +1039,6 @@ function openPhotoModal(photoId) {
 
     // Update modal content
     elements.modalPhoto.src = photo.url;
-    elements.photoId.textContent = `ID: ${photo.id}`;
     elements.photoDate.textContent = `날짜: ${formatDate(photo.date)}`;
     elements.photoLocation.textContent = `위치: ${photo.location}`;
 

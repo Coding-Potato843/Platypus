@@ -18,6 +18,7 @@
 
 ### 2. EXIF 메타데이터 추출
 - [x] EXIF 파싱 함수 구현 (날짜, GPS 좌표) → js/utils/exif.js
+- [x] GPS 좌표 → 지역명 변환 (역지오코딩) → OpenStreetMap Nominatim API
 
 ### 3. JavaScript 수정 (main.js)
 - [x] 파일 선택 시 "마지막 동기화 날짜" 이후 사진만 필터링
@@ -25,8 +26,12 @@
 - [x] importSelectedPhotos() → 실제 uploadPhotos() 연결
 - [x] 업로드 완료 후 updateLastSync() 호출
 - [x] 업로드 완료 후 갤러리 새로고침
+- [x] 역지오코딩 백그라운드 처리 (processReverseGeocoding)
 
 ### 4. 추가 고려사항
 - [ ] 파일 크기 제한 (50MB) - Supabase Storage 기본 제한 있음
 - [ ] 중복 업로드 방지 - 추후 구현 가능
-- [ ] GPS 좌표 → 주소 변환 (역지오코딩) - 추후 구현 가능
+
+## 브라우저 제한 사항
+웹 브라우저는 보안상 사용자가 직접 파일을 선택하지 않는 한 갤러리에 자동 접근할 수 없음.
+이는 모든 브라우저에 적용되는 보안 정책으로, 네이티브 앱만 갤러리 자동 스캔 가능.
