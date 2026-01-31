@@ -133,9 +133,11 @@ Project_02_Platypus/
 │   ├── css/styles.css
 │   ├── js/
 │   │   ├── main.js              # App entry, state, event listeners
-│   │   └── services/
-│   │       ├── api.js           # Supabase client & API
-│   │       └── auth.js          # Supabase Auth
+│   │   ├── services/
+│   │   │   ├── api.js           # Supabase client & API
+│   │   │   └── auth.js          # Supabase Auth
+│   │   └── utils/
+│   │       └── exif.js          # EXIF parser & reverse geocoding
 │   └── background_image/
 │       ├── images.json          # Background image list (edit this to add/remove images)
 │       └── *.png                # Background image files
@@ -207,9 +209,24 @@ loadFriendPhotos(loadMore = false)           // Load friends' photos with pagina
 updateUIForAuthenticatedUser(showLoadingOverlay = true)  // Setup UI after login
 updateUIForUnauthenticatedUser()                          // Reset UI after logout
 
+// Photo Sync
+openSyncModal()              // Open sync modal
+handleFileSelect(event)      // Handle file selection, extract EXIF, filter by date
+renderSyncPreview()          // Render photo preview gallery
+processReverseGeocoding()    // Convert GPS coordinates to location names (background)
+importSelectedPhotos()       // Upload selected photos to Supabase
+
 // Account Deletion
 confirmDeleteAccount()   // Show confirmation modal
 handleDeleteAccount()    // Execute account deletion
+```
+
+### utils/exif.js
+```javascript
+extractExifData(file)                    // Extract date and GPS from image EXIF
+reverseGeocode(latitude, longitude)      // Convert GPS to location name (OpenStreetMap Nominatim)
+batchReverseGeocode(coordinates)         // Batch geocoding with rate limiting
+getFileDate(file)                        // Get file's lastModified date as fallback
 ```
 
 ---
@@ -247,6 +264,41 @@ if (elements.appContainer.style.display === 'block') {
     return; // Skip if app is already displayed
 }
 ```
+
+### Photo Sync Flow
+Mobile-first photo upload workflow:
+
+```
+1. User clicks [Sync] button
+       ↓
+2. User selects photos from device gallery (input[type=file])
+       ↓
+3. App extracts EXIF data (date, GPS coordinates)
+       ↓
+4. Filter: only photos newer than last sync date
+       ↓
+5. Preview with all photos selected (user deselects unwanted)
+       ↓
+6. Background: Reverse geocoding (GPS → location name)
+       ↓
+7. User clicks [Import] → Upload to Supabase Storage
+       ↓
+8. Update last_sync_at timestamp → Refresh gallery
+```
+
+**EXIF Extraction:**
+- Date: `DateTimeOriginal` > `DateTime` > file's `lastModified`
+- Location: GPS coordinates extracted, then converted via Nominatim API
+
+**Reverse Geocoding (OpenStreetMap Nominatim):**
+- Free API, no key required
+- Rate limited: 1 request/second
+- Returns city/district level (e.g., "서울특별시, 강남구")
+- Results cached to reduce API calls
+
+**Browser Limitation:**
+Web browsers cannot automatically access device gallery. Users must manually select files.
+This is a security restriction in all browsers - only native apps can scan gallery automatically.
 
 ### Account Deletion Flow
 Deletion sequence when clicking "Delete Account" button in Account tab:
@@ -297,6 +349,10 @@ confirmDeleteAccount() → handleDeleteAccount() → deleteAccount() (auth.js)
 - Profile edit, friend search/add, photo download, pagination
 - Group filtering fix (dynamic DOM query for group chips)
 - Account deletion - complete data removal including auth.users via RPC
+- Photo sync with EXIF extraction (date, GPS)
+- Reverse geocoding (GPS → location name via OpenStreetMap)
+- Upload progress indicator
+- Last sync time tracking and filtering
 
 ### Required Setup
 Run these in **Supabase SQL Editor** before using the app:

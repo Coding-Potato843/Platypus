@@ -1,7 +1,11 @@
 /**
  * EXIF Parser Utility
  * Extracts date and GPS location from image files
+ * Includes reverse geocoding for location names
  */
+
+// Cache for reverse geocoding results to avoid duplicate API calls
+const geocodeCache = new Map();
 
 /**
  * Extract EXIF data from an image file
@@ -26,6 +30,115 @@ export async function extractExifData(file) {
         const slice = file.slice(0, 128 * 1024);
         reader.readAsArrayBuffer(slice);
     });
+}
+
+/**
+ * Reverse geocode GPS coordinates to location name
+ * Uses OpenStreetMap Nominatim API (free, no API key required)
+ * @param {number} latitude
+ * @param {number} longitude
+ * @returns {Promise<string|null>} Location name (city/district level)
+ */
+export async function reverseGeocode(latitude, longitude) {
+    if (latitude === null || longitude === null) {
+        return null;
+    }
+
+    // Round coordinates to reduce API calls (approximately 1km precision)
+    const roundedLat = Math.round(latitude * 100) / 100;
+    const roundedLon = Math.round(longitude * 100) / 100;
+    const cacheKey = `${roundedLat},${roundedLon}`;
+
+    // Check cache first
+    if (geocodeCache.has(cacheKey)) {
+        return geocodeCache.get(cacheKey);
+    }
+
+    try {
+        const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&zoom=10&accept-language=ko`,
+            {
+                headers: {
+                    'User-Agent': 'Platypus Photo App'
+                }
+            }
+        );
+
+        if (!response.ok) {
+            console.warn('Geocoding API error:', response.status);
+            return null;
+        }
+
+        const data = await response.json();
+        const address = data.address;
+
+        // Build location string (city/district level only)
+        let location = null;
+        if (address) {
+            const parts = [];
+
+            // Country
+            if (address.country) {
+                // For Korea, use shorter format
+                if (address.country === '대한민국' || address.country === 'South Korea') {
+                    // City/Province level
+                    if (address.city) {
+                        parts.push(address.city);
+                    } else if (address.province || address.state) {
+                        parts.push(address.province || address.state);
+                    }
+
+                    // District level
+                    if (address.borough || address.suburb || address.district || address.town) {
+                        parts.push(address.borough || address.suburb || address.district || address.town);
+                    }
+                } else {
+                    // For other countries
+                    if (address.city || address.town || address.village) {
+                        parts.push(address.city || address.town || address.village);
+                    }
+                    parts.push(address.country);
+                }
+            }
+
+            location = parts.length > 0 ? parts.join(', ') : null;
+        }
+
+        // Cache the result
+        geocodeCache.set(cacheKey, location);
+
+        return location;
+    } catch (error) {
+        console.warn('Reverse geocoding error:', error);
+        return null;
+    }
+}
+
+/**
+ * Batch reverse geocode with rate limiting
+ * Nominatim allows max 1 request per second
+ * @param {Array<{latitude: number, longitude: number}>} coordinates
+ * @returns {Promise<Array<string|null>>}
+ */
+export async function batchReverseGeocode(coordinates) {
+    const results = [];
+
+    for (let i = 0; i < coordinates.length; i++) {
+        const { latitude, longitude } = coordinates[i];
+        const location = await reverseGeocode(latitude, longitude);
+        results.push(location);
+
+        // Rate limiting: wait 1 second between requests (skip if cached)
+        const roundedLat = Math.round(latitude * 100) / 100;
+        const roundedLon = Math.round(longitude * 100) / 100;
+        const wasCached = geocodeCache.has(`${roundedLat},${roundedLon}`);
+
+        if (i < coordinates.length - 1 && !wasCached) {
+            await new Promise(resolve => setTimeout(resolve, 1100));
+        }
+    }
+
+    return results;
 }
 
 /**
@@ -114,13 +227,13 @@ function parseExifSegment(view, offset) {
         result.date = formatExifDate(ifd0Data.dateTime);
     }
 
-    // Get GPS data
+    // Get GPS data (location will be filled by reverse geocoding later)
     if (ifd0Data.gpsIFDPointer) {
         const gpsData = parseGPSIFD(view, tiffOffset, tiffOffset + ifd0Data.gpsIFDPointer, littleEndian);
         if (gpsData.latitude !== null && gpsData.longitude !== null) {
             result.latitude = gpsData.latitude;
             result.longitude = gpsData.longitude;
-            result.location = `${gpsData.latitude.toFixed(6)}, ${gpsData.longitude.toFixed(6)}`;
+            // location is null - will be resolved via reverseGeocode()
         }
     }
 

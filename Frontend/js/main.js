@@ -26,7 +26,7 @@ import {
     updateLastSync,
     ApiError
 } from './services/api.js';
-import { extractExifData, getFileDate } from './utils/exif.js';
+import { extractExifData, getFileDate, reverseGeocode } from './utils/exif.js';
 
 // ============================================
 // Mock Data (Replace with API calls)
@@ -1227,7 +1227,9 @@ async function handleFileSelect(event) {
                 file,
                 preview,
                 date: photoDate,
-                location: exifData.location || null,
+                location: null, // Will be filled by reverse geocoding
+                latitude: exifData.latitude,
+                longitude: exifData.longitude,
             });
         }
 
@@ -1246,6 +1248,9 @@ async function handleFileSelect(event) {
 
         // Show preview state
         renderSyncPreview();
+
+        // Reverse geocode locations in background
+        processReverseGeocoding();
 
         if (filteredCount > 0) {
             showToast(`${filteredCount}개의 이전 사진이 제외되었습니다`, 'info');
@@ -1298,6 +1303,37 @@ function renderSyncPreview() {
 
     // Enable import button
     updateImportButtonState();
+}
+
+/**
+ * Process reverse geocoding for sync files in background
+ * Updates location names from GPS coordinates
+ */
+async function processReverseGeocoding() {
+    // Get files with GPS coordinates but no location
+    const filesWithGPS = state.syncFiles.filter(
+        f => f.latitude !== null && f.longitude !== null && !f.location
+    );
+
+    if (filesWithGPS.length === 0) return;
+
+    // Process each file with rate limiting
+    for (const photoData of filesWithGPS) {
+        try {
+            const location = await reverseGeocode(photoData.latitude, photoData.longitude);
+            if (location) {
+                photoData.location = location;
+            }
+        } catch (error) {
+            console.warn('Reverse geocoding failed for photo:', photoData.id, error);
+        }
+    }
+
+    // Log completion
+    const successCount = filesWithGPS.filter(f => f.location).length;
+    if (successCount > 0) {
+        console.log(`Reverse geocoding completed: ${successCount}/${filesWithGPS.length} locations resolved`);
+    }
 }
 
 /**
