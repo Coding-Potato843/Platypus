@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd complete account deletion with auth.users removal via RPC\n\n- Complete account deletion now removes user from both public.users and auth.users\n- Added delete_user_auth\\(\\) RPC function for auth.users deletion\n- Updated deleteUserAccount\\(\\) in api.js with RPC call\n- Translated CLAUDE.md to English\n- Documented account deletion flow and required RLS policies\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
+    ]
+  }
+}

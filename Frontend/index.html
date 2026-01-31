@@ -406,18 +406,46 @@
                 </button>
             </div>
             <div class="sync-body">
-                <p class="sync-description">가져올 사진을 선택하세요</p>
-                <div class="sync-actions-top">
-                    <button class="btn btn-link" id="selectAllBtn">전체 선택</button>
-                    <button class="btn btn-link" id="deselectAllBtn">전체 해제</button>
+                <!-- Hidden file input -->
+                <input type="file" id="photoFileInput" multiple accept="image/*" style="display: none;">
+
+                <!-- Initial state: Select photos -->
+                <div id="syncInitialState">
+                    <p class="sync-description">갤러리에서 동기화할 사진을 선택하세요</p>
+                    <p class="sync-info" id="lastSyncInfo"></p>
+                    <button class="btn btn-primary btn-large" id="selectPhotosBtn">
+                        <i class="ph ph-images"></i>
+                        <span>갤러리에서 사진 선택</span>
+                    </button>
                 </div>
-                <div class="sync-gallery" id="syncGallery">
-                    <!-- Sync preview photos will be rendered here -->
+
+                <!-- Preview state: Show selected photos -->
+                <div id="syncPreviewState" style="display: none;">
+                    <p class="sync-description">
+                        <span id="syncPhotoCount">0</span>장의 새 사진이 발견되었습니다
+                    </p>
+                    <div class="sync-actions-top">
+                        <button class="btn btn-link" id="selectAllBtn">전체 선택</button>
+                        <button class="btn btn-link" id="deselectAllBtn">전체 해제</button>
+                        <button class="btn btn-link" id="reselectPhotosBtn">다시 선택</button>
+                    </div>
+                    <div class="sync-gallery" id="syncGallery">
+                        <!-- Sync preview photos will be rendered here -->
+                    </div>
+                </div>
+
+                <!-- Upload progress -->
+                <div id="syncUploadState" style="display: none;">
+                    <p class="sync-description">사진을 업로드하는 중...</p>
+                    <div class="upload-progress">
+                        <div class="upload-progress-bar" id="uploadProgressBar"></div>
+                    </div>
+                    <p class="upload-progress-text" id="uploadProgressText">0 / 0</p>
                 </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" data-close-modal>취소</button>
-                <button class="btn btn-primary" id="importPhotosBtn">
+                <button class="btn btn-primary" id="importPhotosBtn" disabled>
                     <i class="ph ph-upload"></i>
                     <span>선택한 사진 가져오기</span>
                 </button>

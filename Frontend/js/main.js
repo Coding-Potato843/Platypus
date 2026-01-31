@@ -23,8 +23,10 @@ import {
     searchUsers,
     getUserStats,
     updateUserProfile,
+    updateLastSync,
     ApiError
 } from './services/api.js';
+import { extractExifData, getFileDate } from './utils/exif.js';
 
 // ============================================
 // Mock Data (Replace with API calls)
@@ -253,6 +255,8 @@ const state = {
         hideControlsTimeout: null,
     },
     selectedSyncPhotos: new Set(),
+    syncFiles: [], // {file, preview, date, location, id}
+    lastSyncDate: null,
     currentPhotoId: null,
     // Pagination state
     pagination: {
@@ -310,10 +314,20 @@ const elements = {
     downloadPhotoBtn: document.getElementById('downloadPhotoBtn'),
 
     // Sync Modal Elements
+    photoFileInput: document.getElementById('photoFileInput'),
+    syncInitialState: document.getElementById('syncInitialState'),
+    syncPreviewState: document.getElementById('syncPreviewState'),
+    syncUploadState: document.getElementById('syncUploadState'),
+    selectPhotosBtn: document.getElementById('selectPhotosBtn'),
+    lastSyncInfo: document.getElementById('lastSyncInfo'),
+    syncPhotoCount: document.getElementById('syncPhotoCount'),
     syncGallery: document.getElementById('syncGallery'),
     selectAllBtn: document.getElementById('selectAllBtn'),
     deselectAllBtn: document.getElementById('deselectAllBtn'),
+    reselectPhotosBtn: document.getElementById('reselectPhotosBtn'),
     importPhotosBtn: document.getElementById('importPhotosBtn'),
+    uploadProgressBar: document.getElementById('uploadProgressBar'),
+    uploadProgressText: document.getElementById('uploadProgressText'),
 
     // Group Modal Elements
     newGroupName: document.getElementById('newGroupName'),
@@ -688,6 +702,8 @@ async function updateUIForAuthenticatedUser(showLoadingOverlay = true) {
         elements.lastSync.textContent = profile.last_sync_at
             ? `마지막 동기화: ${formatDateTime(profile.last_sync_at)}`
             : '마지막 동기화: 없음';
+        // Store last sync date in state
+        state.lastSyncDate = profile.last_sync_at || null;
     } else {
         // Fallback to auth user data
         elements.userName.textContent = user.user_metadata?.display_name || user.email;
@@ -695,6 +711,7 @@ async function updateUIForAuthenticatedUser(showLoadingOverlay = true) {
         elements.userEmail.textContent = user.email;
         elements.joinDate.textContent = `가입일: ${formatDate(user.created_at)}`;
         elements.lastSync.textContent = '마지막 동기화: 없음';
+        state.lastSyncDate = null;
     }
 
     // Load user stats from Supabase
@@ -728,6 +745,11 @@ function updateUIForUnauthenticatedUser() {
     elements.photoCount.textContent = '0';
     elements.friendCount.textContent = '0';
     elements.storageUsed.textContent = '0 MB';
+
+    // Reset sync state
+    state.lastSyncDate = null;
+    state.syncFiles = [];
+    state.selectedSyncPhotos.clear();
 }
 
 // ============================================
@@ -1141,17 +1163,130 @@ async function togglePhotoGroup(photoId, groupId) {
 // ============================================
 // Photo Sync
 // ============================================
-function openSyncModal() {
-    state.selectedSyncPhotos.clear();
 
-    elements.syncGallery.innerHTML = mockSyncPhotos.map(photo => `
-        <div class="sync-photo-item" data-photo-id="${photo.id}">
-            <img src="${photo.url}" alt="Sync Photo">
+/**
+ * Open sync modal and reset state
+ */
+function openSyncModal() {
+    // Reset state
+    state.selectedSyncPhotos.clear();
+    state.syncFiles = [];
+
+    // Show initial state, hide others
+    elements.syncInitialState.style.display = 'flex';
+    elements.syncPreviewState.style.display = 'none';
+    elements.syncUploadState.style.display = 'none';
+    elements.importPhotosBtn.disabled = true;
+
+    // Update last sync info
+    const profile = getCurrentUserProfile();
+    if (state.lastSyncDate) {
+        elements.lastSyncInfo.textContent = `마지막 동기화: ${formatDateTime(state.lastSyncDate)}`;
+    } else {
+        elements.lastSyncInfo.textContent = '아직 동기화한 적이 없습니다';
+    }
+
+    openModal(elements.syncModal);
+}
+
+/**
+ * Handle file selection from gallery
+ */
+async function handleFileSelect(event) {
+    const files = Array.from(event.target.files);
+    if (files.length === 0) return;
+
+    showLoading('사진 정보를 읽는 중...');
+
+    try {
+        const syncFiles = [];
+        let filteredCount = 0;
+
+        for (const file of files) {
+            // Extract EXIF data
+            const exifData = await extractExifData(file);
+
+            // Use EXIF date or file's lastModified date
+            const photoDate = exifData.date || getFileDate(file);
+
+            // Filter by last sync date (only new photos)
+            if (state.lastSyncDate) {
+                const lastSync = new Date(state.lastSyncDate);
+                const fileDate = new Date(photoDate);
+                if (fileDate <= lastSync) {
+                    filteredCount++;
+                    continue;
+                }
+            }
+
+            // Create preview URL
+            const preview = URL.createObjectURL(file);
+
+            syncFiles.push({
+                id: `sync_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                file,
+                preview,
+                date: photoDate,
+                location: exifData.location || null,
+            });
+        }
+
+        state.syncFiles = syncFiles;
+
+        hideLoading();
+
+        if (syncFiles.length === 0) {
+            if (filteredCount > 0) {
+                showToast(`${filteredCount}개의 사진이 이미 동기화되었습니다`, 'info');
+            } else {
+                showToast('선택한 사진이 없습니다', 'warning');
+            }
+            return;
+        }
+
+        // Show preview state
+        renderSyncPreview();
+
+        if (filteredCount > 0) {
+            showToast(`${filteredCount}개의 이전 사진이 제외되었습니다`, 'info');
+        }
+    } catch (error) {
+        hideLoading();
+        console.error('File processing error:', error);
+        showToast('사진을 처리하는 중 오류가 발생했습니다', 'error');
+    }
+
+    // Reset file input for re-selection
+    event.target.value = '';
+}
+
+/**
+ * Render sync preview gallery
+ */
+function renderSyncPreview() {
+    // Update UI state
+    elements.syncInitialState.style.display = 'none';
+    elements.syncPreviewState.style.display = 'block';
+    elements.syncUploadState.style.display = 'none';
+
+    // Update photo count
+    elements.syncPhotoCount.textContent = state.syncFiles.length;
+
+    // Render gallery
+    elements.syncGallery.innerHTML = state.syncFiles.map(photo => `
+        <div class="sync-photo-item selected" data-photo-id="${photo.id}">
+            <img src="${photo.preview}" alt="Sync Photo">
             <div class="sync-check">
                 <i class="ph-bold ph-check"></i>
             </div>
         </div>
     `).join('');
+
+    // Select all by default
+    state.selectedSyncPhotos.clear();
+    state.syncFiles.forEach(photo => {
+        state.selectedSyncPhotos.add(photo.id);
+    });
 
     // Add click handlers
     elements.syncGallery.querySelectorAll('.sync-photo-item').forEach(item => {
@@ -1161,9 +1296,13 @@ function openSyncModal() {
         });
     });
 
-    openModal(elements.syncModal);
+    // Enable import button
+    updateImportButtonState();
 }
 
+/**
+ * Toggle sync photo selection
+ */
 function toggleSyncPhoto(photoId, element) {
     if (state.selectedSyncPhotos.has(photoId)) {
         state.selectedSyncPhotos.delete(photoId);
@@ -1172,51 +1311,141 @@ function toggleSyncPhoto(photoId, element) {
         state.selectedSyncPhotos.add(photoId);
         element.classList.add('selected');
     }
+    updateImportButtonState();
 }
 
+/**
+ * Update import button state
+ */
+function updateImportButtonState() {
+    elements.importPhotosBtn.disabled = state.selectedSyncPhotos.size === 0;
+}
+
+/**
+ * Select all sync photos
+ */
 function selectAllSyncPhotos() {
     elements.syncGallery.querySelectorAll('.sync-photo-item').forEach(item => {
         const photoId = item.dataset.photoId;
         state.selectedSyncPhotos.add(photoId);
         item.classList.add('selected');
     });
+    updateImportButtonState();
 }
 
+/**
+ * Deselect all sync photos
+ */
 function deselectAllSyncPhotos() {
     state.selectedSyncPhotos.clear();
     elements.syncGallery.querySelectorAll('.sync-photo-item').forEach(item => {
         item.classList.remove('selected');
     });
+    updateImportButtonState();
 }
 
-function importSelectedPhotos() {
+/**
+ * Reset to file selection state
+ */
+function resetSyncToInitial() {
+    // Clean up preview URLs
+    state.syncFiles.forEach(photo => {
+        URL.revokeObjectURL(photo.preview);
+    });
+
+    state.syncFiles = [];
+    state.selectedSyncPhotos.clear();
+
+    elements.syncInitialState.style.display = 'flex';
+    elements.syncPreviewState.style.display = 'none';
+    elements.syncUploadState.style.display = 'none';
+    elements.importPhotosBtn.disabled = true;
+}
+
+/**
+ * Import selected photos to Supabase
+ */
+async function importSelectedPhotos() {
     if (state.selectedSyncPhotos.size === 0) {
         showToast('사진을 선택해주세요', 'warning');
         return;
     }
 
-    showLoading('사진을 가져오는 중...');
+    const user = getCurrentUser();
+    if (!user) {
+        showToast('로그인이 필요합니다', 'error');
+        return;
+    }
 
-    // Simulate import delay
-    setTimeout(() => {
-        const imported = mockSyncPhotos
-            .filter(p => state.selectedSyncPhotos.has(p.id))
-            .map(p => ({
-                ...p,
-                id: `imported_${p.id}`,
-                location: '알 수 없음',
-                groupIds: [],
-                author: null,
-            }));
+    // Get selected files
+    const selectedFiles = state.syncFiles.filter(f => state.selectedSyncPhotos.has(f.id));
+    const totalCount = selectedFiles.length;
+    let uploadedCount = 0;
+    let errorCount = 0;
 
-        state.photos = [...imported, ...state.photos];
+    // Show upload progress state
+    elements.syncInitialState.style.display = 'none';
+    elements.syncPreviewState.style.display = 'none';
+    elements.syncUploadState.style.display = 'flex';
+    elements.importPhotosBtn.disabled = true;
 
-        hideLoading();
-        closeModal(elements.syncModal);
-        renderMyPhotos();
+    // Update progress UI
+    const updateProgress = () => {
+        const percent = (uploadedCount / totalCount) * 100;
+        elements.uploadProgressBar.style.width = `${percent}%`;
+        elements.uploadProgressText.textContent = `${uploadedCount} / ${totalCount}`;
+    };
 
-        showToast(`${imported.length}개의 사진을 가져왔습니다`, 'success');
-    }, 1500);
+    updateProgress();
+
+    // Upload photos one by one
+    for (const photoData of selectedFiles) {
+        try {
+            await uploadPhoto(user.id, photoData.file, {
+                date: photoData.date,
+                location: photoData.location,
+            });
+            uploadedCount++;
+        } catch (error) {
+            console.error('Upload error:', error);
+            errorCount++;
+        }
+        updateProgress();
+    }
+
+    // Update last sync time
+    try {
+        await updateLastSync(user.id);
+        state.lastSyncDate = new Date().toISOString();
+
+        // Update UI
+        elements.lastSync.textContent = `마지막 동기화: ${formatDateTime(state.lastSyncDate)}`;
+    } catch (error) {
+        console.error('Failed to update last sync:', error);
+    }
+
+    // Clean up preview URLs
+    state.syncFiles.forEach(photo => {
+        URL.revokeObjectURL(photo.preview);
+    });
+
+    // Reset state
+    state.syncFiles = [];
+    state.selectedSyncPhotos.clear();
+
+    // Close modal and refresh
+    closeModal(elements.syncModal);
+
+    // Reload photos from database
+    await loadPhotos();
+    renderMyPhotos();
+
+    // Show result toast
+    if (errorCount > 0) {
+        showToast(`${uploadedCount}개 업로드 완료, ${errorCount}개 실패`, 'warning');
+    } else {
+        showToast(`${uploadedCount}개의 사진을 가져왔습니다`, 'success');
+    }
 }
 
 // ============================================
@@ -1952,8 +2181,16 @@ function setupEventListeners() {
     });
 
     // Sync modal
+    elements.selectPhotosBtn.addEventListener('click', () => {
+        elements.photoFileInput.click();
+    });
+    elements.photoFileInput.addEventListener('change', handleFileSelect);
     elements.selectAllBtn.addEventListener('click', selectAllSyncPhotos);
     elements.deselectAllBtn.addEventListener('click', deselectAllSyncPhotos);
+    elements.reselectPhotosBtn.addEventListener('click', () => {
+        resetSyncToInitial();
+        elements.photoFileInput.click();
+    });
     elements.importPhotosBtn.addEventListener('click', importSelectedPhotos);
 
     // Photo modal buttons

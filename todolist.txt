@@ -1,112 +1,32 @@
-# Platypus - 개발 TODO 목록
+# 사진 동기화 기능 구현 TODO
 
-## 현재 상태
-- [x] 프론트엔드 UI 구현 완료 (Vanilla JS)
-- [x] Render Static Site 배포 완료
-- [x] Supabase 프로젝트 생성 및 테이블 구성 완료
-- [x] api.js에 Supabase 클라이언트 설정 추가
+## 기능 요구사항
+- 모바일에서 "동기화" 버튼 클릭 → 갤러리 접근
+- "마지막 동기화 날짜" 이후 사진만 자동 필터링
+- 기본: 모든 사진 선택됨 (원치 않는 것만 해제)
+- EXIF에서 촬영 날짜/위치 추출 필수
 
----
+## 버그 수정
+- [x] 동기화 시점이 갱신되지 않는 문제 → updateLastSync() 호출 추가
+- [x] 새로고침하면 이미지가 사라지는 문제 → Supabase DB에 실제 저장
 
-## 다음 단계 (Supabase 연동)
+## 구현 항목
 
-### 1. 로그인/회원가입 기능 구현
-- [x] 로그인 화면 UI 추가 (index.html)
-- [x] 회원가입 화면 UI 추가
-- [x] auth.js에 Supabase Auth 연동
-  - supabase.auth.signUp() - 회원가입
-  - supabase.auth.signInWithPassword() - 로그인
-  - supabase.auth.signOut() - 로그아웃
-  - supabase.auth.getUser() - 현재 사용자 확인
-- [x] 로그인 상태에 따른 UI 분기 처리
-- [x] 세션 유지 (Supabase가 자동 처리)
+### 1. HTML 수정 (index.html)
+- [x] syncModal에 파일 입력 추가 (<input type="file" multiple accept="image/*">)
+- [x] 업로드 진행률 표시 요소 추가
 
-### 2. 사진 조회/업로드 Supabase 연동
-- [x] Supabase Storage 버킷 생성 (이름: photos) ⚠️ Dashboard에서 수동 설정 필요
-- [X] Storage 버킷 공개 접근 설정 또는 RLS 정책 설정 ⚠️ Dashboard에서 수동 설정 필요
-- [x] api.js의 getPhotos() 함수를 Supabase 쿼리로 변경
-- [x] api.js의 uploadPhotos() 함수를 Supabase Storage로 변경
-- [x] api.js의 deletePhoto() 함수를 Supabase로 변경
-- [x] main.js에서 Supabase API 사용하도록 연동
+### 2. EXIF 메타데이터 추출
+- [x] EXIF 파싱 함수 구현 (날짜, GPS 좌표) → js/utils/exif.js
 
-### 3. 그룹 관리 Supabase 연동
-- [x] api.js의 getGroups() 함수를 Supabase 쿼리로 변경
-- [x] api.js의 createGroup() 함수를 Supabase로 변경
-- [x] api.js의 deleteGroup() 함수를 Supabase로 변경
-- [x] api.js의 updateGroup() 함수 추가
-- [x] photo_groups 테이블 연동 (사진-그룹 매핑)
-- [x] main.js에서 Supabase API 사용하도록 연동
+### 3. JavaScript 수정 (main.js)
+- [x] 파일 선택 시 "마지막 동기화 날짜" 이후 사진만 필터링
+- [x] 선택한 파일 미리보기 렌더링 (기본 전체 선택)
+- [x] importSelectedPhotos() → 실제 uploadPhotos() 연결
+- [x] 업로드 완료 후 updateLastSync() 호출
+- [x] 업로드 완료 후 갤러리 새로고침
 
-### 4. 친구 기능 Supabase 연동
-- [x] api.js의 getFriends() 함수를 Supabase 쿼리로 변경
-- [x] api.js의 addFriend() 함수를 Supabase로 변경
-- [x] api.js의 removeFriend() 함수를 Supabase로 변경
-- [x] 친구 사진 조회 기능 구현 (getFriendsPhotos)
-- [x] 사용자 검색 기능 추가 (searchUsers)
-- [x] main.js에서 Supabase API 사용하도록 연동
-
-### 5. Row Level Security (RLS) 설정
-- [x] RLS 정책 SQL 파일 생성 완료
-  - supabase_rls_setup.sql (테이블 RLS)
-  - supabase_storage_setup.sql (Storage RLS - 참고용)
-- [x] Storage photos 버킷 정책 설정 완료 (Dashboard에서 수동 설정)
-  - Public 버킷으로 설정
-  - INSERT 정책: 인증된 사용자가 자기 폴더에 업로드
-  - DELETE 정책: 인증된 사용자가 자기 파일 삭제
-  - SELECT 정책: DELETE 생성 시 자동 추가
-- [X] Supabase SQL Editor에서 테이블 RLS 실행 ⚠️ 수동 실행 필요
-  - supabase_rls_setup.sql 파일 전체 복사 후 실행
-  - users, photos, groups, photo_groups, friendships 테이블
-
-### 6. 추가 기능
-- [x] 프로필 편집 기능
-- [x] 친구 검색 및 추가 기능
-- [x] 사진 다운로드 기능
-- [x] 페이지네이션 구현 (대용량 사진 대응)
-- [ ] 로그인 화면 배경 적당한 자연 이미지로 변경 -> 이거 해야함
----
-
-## Supabase 참고 정보
-
-### 프로젝트 정보
-- URL: https://vtpgatnkobvjqwvoqtad.supabase.co
-- Dashboard: https://supabase.com/dashboard/project/vtpgatnkobvjqwvoqtad
-
-### 테이블 구조 (5개)
-1. users - 사용자 프로필
-2. photos - 사진
-3. groups - 그룹/앨범
-4. photo_groups - 사진-그룹 연결 (Junction Table)
-5. friendships - 친구 관계
-
-### Supabase 클라이언트 사용법
-```javascript
-import { supabase } from './services/api.js';
-
-// 데이터 조회
-const { data, error } = await supabase.from('테이블명').select('*');
-
-// 데이터 추가
-const { data, error } = await supabase.from('테이블명').insert({ ... });
-
-// 데이터 수정
-const { data, error } = await supabase.from('테이블명').update({ ... }).eq('id', id);
-
-// 데이터 삭제
-const { error } = await supabase.from('테이블명').delete().eq('id', id);
-```
-
----
-
-## 배포 정보
-
-### Render Static Site
-- Publish Directory: Frontend
-- 자동 배포: GitHub main 브랜치 푸시 시
-
-### 배포 URL
-- (Render에서 확인하여 여기에 기록)
-
----
-
-마지막 업데이트: 2026-01-31
+### 4. 추가 고려사항
+- [ ] 파일 크기 제한 (50MB) - Supabase Storage 기본 제한 있음
+- [ ] 중복 업로드 방지 - 추후 구현 가능
+- [ ] GPS 좌표 → 주소 변환 (역지오코딩) - 추후 구현 가능

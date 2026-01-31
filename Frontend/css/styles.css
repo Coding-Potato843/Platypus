@@ -1247,6 +1247,66 @@ body {
     color: white;
 }
 
+/* Sync Initial State */
+#syncInitialState {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-xl);
+    text-align: center;
+    min-height: 200px;
+}
+
+.sync-info {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    margin-bottom: var(--spacing-lg);
+}
+
+.btn-large {
+    padding: var(--spacing-md) var(--spacing-xl);
+    font-size: 1rem;
+}
+
+.btn-large i {
+    font-size: 1.25rem;
+}
+
+/* Upload Progress */
+#syncUploadState {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-xl);
+    text-align: center;
+    min-height: 200px;
+}
+
+.upload-progress {
+    width: 100%;
+    max-width: 400px;
+    height: 8px;
+    background: var(--bg-tertiary);
+    border-radius: var(--border-radius-full);
+    overflow: hidden;
+    margin-bottom: var(--spacing-md);
+}
+
+.upload-progress-bar {
+    height: 100%;
+    background: var(--primary-500);
+    border-radius: var(--border-radius-full);
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+.upload-progress-text {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
 /* Group Modal */
 .group-modal-content {
     width: 500px;

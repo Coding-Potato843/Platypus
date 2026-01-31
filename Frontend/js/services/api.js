@@ -698,6 +698,20 @@ export async function deleteUserAccount(userId) {
 }
 
 /**
+ * Format bytes to human readable string
+ */
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 MB';
+
+    const units = ['B', 'KB', 'MB', 'GB'];
+    const k = 1024;
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    const value = bytes / Math.pow(k, i);
+
+    return `${value.toFixed(1)} ${units[i]}`;
+}
+
+/**
  * Get user stats (photo count, friend count, storage)
  */
 export async function getUserStats(userId) {
@@ -713,6 +727,23 @@ export async function getUserStats(userId) {
         .select('*', { count: 'exact', head: true })
         .eq('user_id', userId);
 
+    // Get storage used from user's folder
+    let storageUsed = '0 MB';
+    try {
+        const { data: files, error: storageError } = await supabase.storage
+            .from('photos')
+            .list(userId, { limit: 1000 });
+
+        if (!storageError && files) {
+            const totalBytes = files.reduce((sum, file) => {
+                return sum + (file.metadata?.size || 0);
+            }, 0);
+            storageUsed = formatBytes(totalBytes);
+        }
+    } catch (e) {
+        console.warn('Error calculating storage:', e);
+    }
+
     if (photoError || friendError) {
         console.warn('Error fetching stats:', photoError, friendError);
     }
@@ -720,7 +751,7 @@ export async function getUserStats(userId) {
     return {
         photoCount: photoCount || 0,
         friendCount: friendCount || 0,
-        storageUsed: '계산 중...', // Storage calculation would require additional API
+        storageUsed,
     };
 }
 
