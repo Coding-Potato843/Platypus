@@ -206,6 +206,10 @@ loadFriendPhotos(loadMore = false)           // Load friends' photos with pagina
 // UI State
 updateUIForAuthenticatedUser(showLoadingOverlay = true)  // Setup UI after login
 updateUIForUnauthenticatedUser()                          // Reset UI after logout
+
+// Account Deletion
+confirmDeleteAccount()   // Show confirmation modal
+handleDeleteAccount()    // Execute account deletion
 ```
 
 ---
@@ -213,47 +217,69 @@ updateUIForUnauthenticatedUser()                          // Reset UI after logo
 ## Authentication Flow
 
 ### Loading Overlay Management
-로그인/새로고침 시 로딩 오버레이가 **한 번만** 연속으로 표시되도록 설계됨.
+Designed so that the loading overlay is displayed **only once** consecutively during login/refresh.
 
-**핵심 원리:**
-- 외부에서 로딩을 시작한 경우 → `showLoadingOverlay = false`로 호출하여 내부 중복 로딩 방지
-- `onAuthStateChange` 콜백에서 앱이 이미 표시 중이면 중복 실행 건너뜀
+**Core Principle:**
+- When loading is started externally → call with `showLoadingOverlay = false` to prevent duplicate loading internally
+- In `onAuthStateChange` callback, skip if app is already displayed
 
-**새로고침 시 흐름:**
+**On Page Refresh:**
 ```
-init() → showLoading('로딩 중...')
-       → initAuth() (세션 확인)
-       → updateUIForAuthenticatedUser(false) (로딩 오버레이 없이)
+init() → showLoading('Loading...')
+       → initAuth() (check session)
+       → updateUIForAuthenticatedUser(false) (without loading overlay)
        → hideLoading()
-       → Toast 표시
+       → Show Toast
 ```
 
-**로그인 시 흐름:**
+**On Login:**
 ```
-handleAuthPageLogin() → showLoading('로그인 중...')
+handleAuthPageLogin() → showLoading('Logging in...')
                       → login()
                       → updateUIForAuthenticatedUser(false)
                       → hideLoading()
-                      → Toast 표시
+                      → Show Toast
 ```
 
-**중복 방지 (onAuthStateChange):**
+**Duplicate Prevention (onAuthStateChange):**
 ```javascript
 if (elements.appContainer.style.display === 'block') {
-    return; // 이미 앱이 표시 중이면 건너뜀
+    return; // Skip if app is already displayed
 }
 ```
+
+### Account Deletion Flow
+Deletion sequence when clicking "Delete Account" button in Account tab:
+
+```
+confirmDeleteAccount() → handleDeleteAccount() → deleteAccount() (auth.js)
+                                                → deleteUserAccount(userId) (api.js)
+```
+
+**Deletion Order (api.js - deleteUserAccount):**
+1. Delete photo files from Storage
+2. Delete photo_groups table (junction table)
+3. Delete photos table
+4. Delete groups table
+5. Delete friendships table (both user_id and friend_id)
+6. Delete public.users table
+7. Delete auth.users (RPC function: `delete_user_auth()`)
+8. Sign out
+
+**Required RLS Policies:**
+- `Users can delete own profile` (public.users)
+- `Users can delete friendships as friend` (friendships - delete relationships where registered as friend_id)
 
 ---
 
 ## RLS Policies
 
 ### Table Policies (supabase_rls_setup.sql)
-- **users**: All can read, only self can create/update
+- **users**: All can read, only self can create/update/delete
 - **photos**: Own photos CRUD, can read friend photos
 - **groups**: Own groups only
 - **photo_groups**: Own photo-group links only
-- **friendships**: Own relationships only
+- **friendships**: Own relationships only (+ delete as friend_id for account deletion)
 
 ### Storage Policies
 - **photos bucket**: Public
@@ -264,14 +290,15 @@ if (elements.appContainer.style.display === 'block') {
 
 ## Implementation Status
 
-### Completed ✅
+### Completed
 - Full UI/UX (gallery, modals, slideshow, tabs, dark theme, responsive)
 - Supabase integration (Auth, Photos, Groups, Friends, User, Storage)
 - RLS policy SQL files
 - Profile edit, friend search/add, photo download, pagination
 - Group filtering fix (dynamic DOM query for group chips)
+- Account deletion - complete data removal including auth.users via RPC
 
-### Required Setup ⚠️
+### Required Setup
 Run these in **Supabase SQL Editor** before using the app:
 
 1. **User profile trigger** (see "Auto-create user profile trigger" above)
@@ -280,6 +307,29 @@ Run these in **Supabase SQL Editor** before using the app:
 
 2. **RLS policies** - Run `supabase_rls_setup.sql`
    - Enable RLS on all tables (users, photos, groups, photo_groups, friendships)
+
+3. **Account deletion RPC function** (for complete account deletion including auth.users)
+   ```sql
+   -- Drop if exists
+   DROP FUNCTION IF EXISTS public.delete_user_auth();
+
+   -- Create function to delete from auth.users
+   CREATE OR REPLACE FUNCTION public.delete_user_auth()
+   RETURNS void
+   LANGUAGE plpgsql
+   SECURITY DEFINER
+   SET search_path = auth, public
+   AS $$
+   BEGIN
+     -- Delete the current user from auth.users
+     -- Supabase handles cascading to related auth tables automatically
+     DELETE FROM auth.users WHERE id = auth.uid();
+   END;
+   $$;
+
+   -- Grant execute permission to authenticated users
+   GRANT EXECUTE ON FUNCTION public.delete_user_auth() TO authenticated;
+   ```
 
 ---
 

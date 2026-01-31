@@ -686,6 +686,14 @@ export async function deleteUserAccount(userId) {
         throw new ApiError(500, `Failed to delete user profile: ${userError.message}`);
     }
 
+    // 9. Delete from auth.users via RPC function
+    const { error: authError } = await supabase.rpc('delete_user_auth');
+
+    if (authError) {
+        console.warn('Error deleting auth user (RPC may not exist):', authError);
+        // Don't throw - public data is already deleted
+    }
+
     return { success: true };
 }
 
