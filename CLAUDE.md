@@ -14,7 +14,7 @@ Photo sharing web app with device sync, group organization, friend sharing, and 
 
 ### 1. Authentication
 - Email/password registration & login with session persistence
-- Validation: Email format, Password (8+ chars, lower/number/special char), Username (3-20 chars, alphanumeric/_)
+- Validation: Email format (duplicate check), Password (8+ chars, lower/number/special char), Username (3-20 chars, Korean/alphanumeric/_)
 - Profile: name, username, email, avatar, join date, last sync, stats
 
 ### 2. Photo Management
@@ -44,6 +44,7 @@ Photo sharing web app with device sync, group organization, friend sharing, and 
 - 3 tabs: My Photos, Friends, Account
 - Dark theme only (cyan primary #06b6d4, slate backgrounds)
 - Components: Toast, Loading overlay, Confirm modal, Photo/Sync/Group/Profile/Add Friend modals
+- Random background image on login/signup page (configurable via `background_image/images.json`)
 
 ---
 
@@ -113,6 +114,9 @@ Project_02_Platypus/
 │       └── services/
 │           ├── api.js           # Supabase client & API
 │           └── auth.js          # Supabase Auth
+├── background_image/
+│   ├── images.json              # Background image list (edit this to add/remove images)
+│   └── *.png                    # Background image files
 ├── supabase_rls_setup.sql       # Table RLS policies
 ├── supabase_storage_setup.sql   # Storage policies (reference)
 └── CLAUDE.md
@@ -201,8 +205,30 @@ validateEmail(email), validatePassword(password), validateUsername(username)
 
 ---
 
+## Auth Background Images
+
+Login/signup page displays a random background image from `background_image/` folder.
+
+### How to Add/Remove Images
+1. Add or remove image files in `background_image/` folder
+2. Edit `background_image/images.json` to update the image list:
+```json
+{
+  "images": [
+    "000_nature.png",
+    "001_city_night.png",
+    "002_ruin.png"
+  ]
+}
+```
+
+### Implementation Details
+- **CSS** (`styles.css`): `.auth-page` has `background-size: cover` with dark overlay (`::before` pseudo-element, 70% opacity)
+- **JS** (`main.js`): `setRandomAuthBackground()` fetches `images.json` and randomly selects one image on page load
+
+---
+
 ## Notes
 - Photo storage: Supabase Storage (Public bucket, 50MB limit)
 - RLS must be enabled for data security
 - Email confirmation may be required (depends on Supabase settings)
-- Mock data available as fallback when API fails

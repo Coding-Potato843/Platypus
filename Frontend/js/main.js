@@ -2005,10 +2005,32 @@ function setupEventListeners() {
 }
 
 // ============================================
+// Set Random Auth Background
+// ============================================
+async function setRandomAuthBackground() {
+    try {
+        const response = await fetch('../background_image/images.json');
+        const data = await response.json();
+        const images = data.images;
+
+        if (images && images.length > 0) {
+            const randomIndex = Math.floor(Math.random() * images.length);
+            const selectedImage = images[randomIndex];
+            elements.authPage.style.backgroundImage = `url('../background_image/${selectedImage}')`;
+        }
+    } catch (error) {
+        console.warn('Failed to load background images:', error);
+    }
+}
+
+// ============================================
 // Initialize App
 // ============================================
 async function init() {
     console.log('🎉 Platypus App Initialized');
+
+    // Set random background for auth page
+    setRandomAuthBackground();
 
     // Setup event listeners
     setupEventListeners();

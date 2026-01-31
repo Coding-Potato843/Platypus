@@ -2056,11 +2056,25 @@ body {
 .auth-page {
     min-height: 100vh;
     background: var(--bg-secondary);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
     display: flex;
     align-items: center;
     justify-content: center;
     position: relative;
     overflow: hidden;
+}
+
+.auth-page::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(15, 23, 42, 0.7);
+    z-index: 0;
 }
 
 .auth-page-container {
