@@ -228,9 +228,9 @@ async function loadAllUserData() {
 // State Management
 // ============================================
 const state = {
-    photos: [...mockPhotos],
-    friendPhotos: [...mockFriendPhotos],
-    friends: [...mockFriends],
+    photos: [],
+    friendPhotos: [],
+    friends: [],
     groups: [
         { id: 'favorites', name: '즐겨찾기' },
         { id: 'travel', name: '여행' },
