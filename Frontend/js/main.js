@@ -2009,14 +2009,14 @@ function setupEventListeners() {
 // ============================================
 async function setRandomAuthBackground() {
     try {
-        const response = await fetch('../background_image/images.json');
+        const response = await fetch('background_image/images.json');
         const data = await response.json();
         const images = data.images;
 
         if (images && images.length > 0) {
             const randomIndex = Math.floor(Math.random() * images.length);
             const selectedImage = images[randomIndex];
-            elements.authPage.style.backgroundImage = `url('../background_image/${selectedImage}')`;
+            elements.authPage.style.backgroundImage = `url('background_image/${selectedImage}')`;
         }
     } catch (error) {
         console.warn('Failed to load background images:', error);

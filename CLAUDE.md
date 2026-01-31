@@ -44,7 +44,7 @@ Photo sharing web app with device sync, group organization, friend sharing, and 
 - 3 tabs: My Photos, Friends, Account
 - Dark theme only (cyan primary #06b6d4, slate backgrounds)
 - Components: Toast, Loading overlay, Confirm modal, Photo/Sync/Group/Profile/Add Friend modals
-- Random background image on login/signup page (configurable via `background_image/images.json`)
+- Random background image on login/signup page (configurable via `Frontend/background_image/images.json`)
 
 ---
 
@@ -109,14 +109,14 @@ Project_02_Platypus/
 ├── Frontend/
 │   ├── index.html
 │   ├── css/styles.css
-│   └── js/
-│       ├── main.js              # App entry, state, event listeners
-│       └── services/
-│           ├── api.js           # Supabase client & API
-│           └── auth.js          # Supabase Auth
-├── background_image/
-│   ├── images.json              # Background image list (edit this to add/remove images)
-│   └── *.png                    # Background image files
+│   ├── js/
+│   │   ├── main.js              # App entry, state, event listeners
+│   │   └── services/
+│   │       ├── api.js           # Supabase client & API
+│   │       └── auth.js          # Supabase Auth
+│   └── background_image/
+│       ├── images.json          # Background image list (edit this to add/remove images)
+│       └── *.png                # Background image files
 ├── supabase_rls_setup.sql       # Table RLS policies
 ├── supabase_storage_setup.sql   # Storage policies (reference)
 └── CLAUDE.md
@@ -207,11 +207,11 @@ validateEmail(email), validatePassword(password), validateUsername(username)
 
 ## Auth Background Images
 
-Login/signup page displays a random background image from `background_image/` folder.
+Login/signup page displays a random background image from `Frontend/background_image/` folder.
 
 ### How to Add/Remove Images
-1. Add or remove image files in `background_image/` folder
-2. Edit `background_image/images.json` to update the image list:
+1. Add or remove image files in `Frontend/background_image/` folder
+2. Edit `Frontend/background_image/images.json` to update the image list:
 ```json
 {
   "images": [
