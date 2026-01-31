@@ -201,8 +201,8 @@ export function validatePassword(password) {
         errors.push('비밀번호는 최소 8자 이상이어야 합니다.');
     }
 
-    if (!/[A-Z]/.test(password)) {
-        errors.push('비밀번호에 대문자가 포함되어야 합니다.');
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+        errors.push('비밀번호에 특수문자가 포함되어야 합니다.');
     }
 
     if (!/[a-z]/.test(password)) {
