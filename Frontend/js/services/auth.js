@@ -57,6 +57,11 @@ export async function register(email, password, username, displayName) {
             throw new AuthError('회원가입에 실패했습니다.');
         }
 
+        // 이미 존재하는 이메일인 경우 identities가 빈 배열로 반환됨
+        if (data.user.identities?.length === 0) {
+            throw new AuthError('이미 사용 중인 이메일입니다.');
+        }
+
         // 2. Create user profile in public.users table
         const { error: profileError } = await supabase
             .from('users')
