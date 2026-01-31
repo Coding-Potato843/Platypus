@@ -246,8 +246,8 @@ export function validateUsername(username) {
         errors.push('사용자명은 최대 20자까지 가능합니다.');
     }
 
-    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-        errors.push('사용자명은 영문, 숫자, 밑줄(_)만 사용 가능합니다.');
+    if (!/^[a-zA-Z0-9_가-힣]+$/.test(username)) {
+        errors.push('사용자명은 한글, 영문, 숫자, 밑줄(_)만 사용 가능합니다.');
     }
 
     return {
