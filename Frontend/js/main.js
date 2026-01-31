@@ -125,6 +125,7 @@ async function loadPhotos(loadMore = false) {
 
 /**
  * Load user's groups from Supabase
+ * If no groups exist, create default groups for new users
  */
 async function loadGroups() {
     const user = getCurrentUser();
@@ -132,13 +133,31 @@ async function loadGroups() {
 
     try {
         const groups = await getGroups(user.id);
+
         if (groups.length > 0) {
             state.groups = groups;
-            updateGroupChips();
+        } else {
+            // Create default groups for new users
+            const defaultGroups = ['즐겨찾기', '여행', '가족', '음식'];
+            const createdGroups = [];
+
+            for (const name of defaultGroups) {
+                try {
+                    const newGroup = await apiCreateGroup(user.id, name);
+                    createdGroups.push(newGroup);
+                } catch (err) {
+                    console.warn(`Failed to create default group "${name}":`, err);
+                }
+            }
+
+            state.groups = createdGroups;
         }
+
+        updateGroupChips();
     } catch (error) {
         console.error('Failed to load groups:', error);
-        // Keep mock data as fallback
+        state.groups = [];
+        updateGroupChips();
     }
 }
 
@@ -236,12 +255,7 @@ const state = {
     photos: [],
     friendPhotos: [],
     friends: [],
-    groups: [
-        { id: 'favorites', name: '즐겨찾기' },
-        { id: 'travel', name: '여행' },
-        { id: 'family', name: '가족' },
-        { id: 'food', name: '음식' },
-    ],
+    groups: [], // Groups are loaded from Supabase
     currentTab: 'my-photos',
     currentGroup: 'all',
     filters: {
