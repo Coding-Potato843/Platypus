@@ -173,6 +173,54 @@ logout(), getCurrentUser(), getCurrentUserProfile(), onAuthStateChange(callback)
 validateEmail(email), validatePassword(password), validateUsername(username)
 ```
 
+### main.js (Key Functions)
+```javascript
+// Data Loading
+loadAllUserData(showLoadingOverlay = true)  // Load photos, groups, friends data
+loadPhotos(loadMore = false)                 // Load user's photos with pagination
+loadFriendPhotos(loadMore = false)           // Load friends' photos with pagination
+
+// UI State
+updateUIForAuthenticatedUser(showLoadingOverlay = true)  // Setup UI after login
+updateUIForUnauthenticatedUser()                          // Reset UI after logout
+```
+
+---
+
+## Authentication Flow
+
+### Loading Overlay Management
+로그인/새로고침 시 로딩 오버레이가 **한 번만** 연속으로 표시되도록 설계됨.
+
+**핵심 원리:**
+- 외부에서 로딩을 시작한 경우 → `showLoadingOverlay = false`로 호출하여 내부 중복 로딩 방지
+- `onAuthStateChange` 콜백에서 앱이 이미 표시 중이면 중복 실행 건너뜀
+
+**새로고침 시 흐름:**
+```
+init() → showLoading('로딩 중...')
+       → initAuth() (세션 확인)
+       → updateUIForAuthenticatedUser(false) (로딩 오버레이 없이)
+       → hideLoading()
+       → Toast 표시
+```
+
+**로그인 시 흐름:**
+```
+handleAuthPageLogin() → showLoading('로그인 중...')
+                      → login()
+                      → updateUIForAuthenticatedUser(false)
+                      → hideLoading()
+                      → Toast 표시
+```
+
+**중복 방지 (onAuthStateChange):**
+```javascript
+if (elements.appContainer.style.display === 'block') {
+    return; // 이미 앱이 표시 중이면 건너뜀
+}
+```
+
 ---
 
 ## RLS Policies

@@ -206,9 +206,12 @@ async function loadFriends() {
 
 /**
  * Load all user data from Supabase
+ * @param {boolean} showLoadingOverlay - Whether to show loading overlay (default: true)
  */
-async function loadAllUserData() {
-    showLoading('데이터 로딩 중...');
+async function loadAllUserData(showLoadingOverlay = true) {
+    if (showLoadingOverlay) {
+        showLoading('데이터 로딩 중...');
+    }
 
     try {
         await Promise.all([
@@ -220,7 +223,9 @@ async function loadAllUserData() {
     } catch (error) {
         console.error('Failed to load user data:', error);
     } finally {
-        hideLoading();
+        if (showLoadingOverlay) {
+            hideLoading();
+        }
     }
 }
 
@@ -548,11 +553,11 @@ async function handleLogin(e) {
     showLoading('로그인 중...');
 
     try {
-        const user = await login(email, password);
-        hideLoading();
+        await login(email, password);
         closeAuthModal();
-        showToast(`환영합니다, ${user.email}!`, 'success');
-        await updateUIForAuthenticatedUser();
+        await updateUIForAuthenticatedUser(false); // Don't show loading overlay (already showing)
+        hideLoading();
+        showToast(`환영합니다!`, 'success');
     } catch (error) {
         hideLoading();
         if (error instanceof AuthError) {
@@ -631,7 +636,11 @@ async function handleLogout() {
     }
 }
 
-async function updateUIForAuthenticatedUser() {
+/**
+ * Update UI for authenticated user
+ * @param {boolean} showLoadingOverlay - Whether to show loading overlay during data load (default: true)
+ */
+async function updateUIForAuthenticatedUser(showLoadingOverlay = true) {
     // Hide auth page, show app
     elements.authPage.style.display = 'none';
     elements.appContainer.style.display = 'block';
@@ -671,7 +680,7 @@ async function updateUIForAuthenticatedUser() {
     }
 
     // Load all user data from Supabase
-    await loadAllUserData();
+    await loadAllUserData(showLoadingOverlay);
 }
 
 function updateUIForUnauthenticatedUser() {
@@ -729,15 +738,15 @@ async function handleAuthPageLogin(e) {
     showLoading('로그인 중...');
 
     try {
-        const user = await login(email, password);
-        hideLoading();
-        showToast(`환영합니다!`, 'success');
+        await login(email, password);
 
         // Show app, hide auth page
         elements.authPage.style.display = 'none';
         elements.appContainer.style.display = 'block';
 
-        await updateUIForAuthenticatedUser();
+        await updateUIForAuthenticatedUser(false); // Don't show loading overlay (already showing)
+        hideLoading();
+        showToast(`환영합니다!`, 'success');
     } catch (error) {
         hideLoading();
         if (error instanceof AuthError) {
@@ -2039,6 +2048,10 @@ async function init() {
     onAuthStateChange(async (event, session) => {
         console.log('Auth state changed:', event);
         if (event === 'SIGNED_IN' && session?.user) {
+            // Skip if already showing app (prevents duplicate loading)
+            if (elements.appContainer.style.display === 'block') {
+                return;
+            }
             // Hide auth page, show app
             elements.authPage.style.display = 'none';
             elements.appContainer.style.display = 'block';
@@ -2051,16 +2064,17 @@ async function init() {
     // Check existing session
     showLoading('로딩 중...');
     const hasSession = await initAuth();
-    hideLoading();
 
     if (hasSession) {
         // User is logged in - show app
         elements.authPage.style.display = 'none';
         elements.appContainer.style.display = 'block';
-        await updateUIForAuthenticatedUser();
+        await updateUIForAuthenticatedUser(false); // Don't show loading overlay (already showing)
+        hideLoading();
         showToast('Platypus에 오신 것을 환영합니다!', 'success');
     } else {
         // User is not logged in - show auth page (landing page)
+        hideLoading();
         elements.authPage.style.display = 'flex';
         elements.appContainer.style.display = 'none';
     }
