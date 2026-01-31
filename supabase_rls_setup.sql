@@ -25,6 +25,7 @@ ALTER TABLE public.friendships ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users can view all profiles" ON public.users;
 DROP POLICY IF EXISTS "Users can insert own profile" ON public.users;
 DROP POLICY IF EXISTS "Users can update own profile" ON public.users;
+DROP POLICY IF EXISTS "Users can delete own profile" ON public.users;
 
 -- 모든 사용자 프로필 조회 가능 (친구 검색을 위해)
 CREATE POLICY "Users can view all profiles"
@@ -44,6 +45,12 @@ ON public.users FOR UPDATE
 TO authenticated
 USING (auth.uid() = id)
 WITH CHECK (auth.uid() = id);
+
+-- 자신의 프로필만 삭제 가능 (회원탈퇴)
+CREATE POLICY "Users can delete own profile"
+ON public.users FOR DELETE
+TO authenticated
+USING (auth.uid() = id);
 
 -- ============================================
 -- 3. photos 테이블 RLS 정책
@@ -165,6 +172,7 @@ USING (
 DROP POLICY IF EXISTS "Users can view own friendships" ON public.friendships;
 DROP POLICY IF EXISTS "Users can insert own friendships" ON public.friendships;
 DROP POLICY IF EXISTS "Users can delete own friendships" ON public.friendships;
+DROP POLICY IF EXISTS "Users can delete friendships as friend" ON public.friendships;
 
 -- 자신의 친구 관계만 조회
 CREATE POLICY "Users can view own friendships"
@@ -186,6 +194,12 @@ CREATE POLICY "Users can delete own friendships"
 ON public.friendships FOR DELETE
 TO authenticated
 USING (auth.uid() = user_id);
+
+-- 자신이 friend로 등록된 관계 삭제 (회원탈퇴 시 필요)
+CREATE POLICY "Users can delete friendships as friend"
+ON public.friendships FOR DELETE
+TO authenticated
+USING (auth.uid() = friend_id);
 
 -- ============================================
 -- 완료 메시지

@@ -16,6 +16,7 @@ Photo sharing web app with device sync, group organization, friend sharing, and 
 - Email/password registration & login with session persistence
 - Validation: Email format (duplicate check), Password (8+ chars, lower/number/special char), Username (3-20 chars, Korean/alphanumeric/_)
 - Profile: name, username, email, avatar, join date, last sync, stats
+- **Account Deletion**: Deletes all user data (photos, groups, friendships) with confirmation modal
 
 ### 2. Photo Management
 - **Sync**: Incremental sync (only new photos since last sync)
@@ -185,12 +186,13 @@ removeFriend(userId, friendId), searchUsers(searchTerm)
 
 // User
 getUserProfile(userId), updateUserProfile(userId, updates), updateLastSync(userId), getUserStats(userId)
+deleteUserAccount(userId)  // Deletes all user data (photos, groups, friendships, user profile)
 ```
 
 ### auth.js
 ```javascript
 initAuth(), login(email, password), register(email, password, username, displayName)
-logout(), getCurrentUser(), getCurrentUserProfile(), onAuthStateChange(callback)
+logout(), deleteAccount(), getCurrentUser(), getCurrentUserProfile(), onAuthStateChange(callback)
 validateEmail(email), validatePassword(password), validateUsername(username)
 ```
 

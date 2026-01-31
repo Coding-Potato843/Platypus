@@ -389,6 +389,18 @@ body {
     background: #dc2626;
 }
 
+.btn-danger-outline {
+    background: transparent;
+    color: var(--danger);
+    border: 1px solid var(--danger);
+}
+
+.btn-danger-outline:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: #dc2626;
+    color: #dc2626;
+}
+
 .btn-link {
     background: none;
     color: var(--primary-400);

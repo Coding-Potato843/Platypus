@@ -3,7 +3,7 @@
  * Main JavaScript Module
  */
 
-import { initAuth, login, register, logout, isAuthenticated, getCurrentUser, getCurrentUserProfile, onAuthStateChange, validateEmail, validatePassword, validateUsername, AuthError } from './services/auth.js';
+import { initAuth, login, register, logout, deleteAccount, isAuthenticated, getCurrentUser, getCurrentUserProfile, onAuthStateChange, validateEmail, validatePassword, validateUsername, AuthError } from './services/auth.js';
 import {
     supabase,
     getPhotos,
@@ -353,6 +353,7 @@ const elements = {
     logoutBtn: document.getElementById('logoutBtn'),
     addFriendBtn: document.getElementById('addFriendBtn'),
     editProfileBtn: document.getElementById('editProfileBtn'),
+    deleteAccountBtn: document.getElementById('deleteAccountBtn'),
 
     // Other
     loadingOverlay: document.getElementById('loadingOverlay'),
@@ -627,6 +628,42 @@ async function handleLogout() {
     } catch (error) {
         hideLoading();
         showToast('로그아웃 중 오류가 발생했습니다.', 'error');
+    }
+}
+
+function confirmDeleteAccount() {
+    elements.confirmTitle.textContent = '회원탈퇴';
+    elements.confirmMessage.textContent = '정말로 탈퇴하시겠습니까? 모든 사진, 그룹, 친구 데이터가 삭제되며 이 작업은 되돌릴 수 없습니다.';
+
+    elements.confirmActionBtn.onclick = async () => {
+        closeModal(elements.confirmModal);
+        await handleDeleteAccount();
+    };
+
+    openModal(elements.confirmModal);
+}
+
+async function handleDeleteAccount() {
+    showLoading('계정 삭제 중...');
+
+    try {
+        await deleteAccount();
+        hideLoading();
+        showToast('계정이 삭제되었습니다. 이용해 주셔서 감사합니다.', 'success');
+
+        // Show auth page, hide app
+        elements.authPage.style.display = 'flex';
+        elements.appContainer.style.display = 'none';
+
+        updateUIForUnauthenticatedUser();
+    } catch (error) {
+        hideLoading();
+        console.error('Delete account error:', error);
+        if (error instanceof AuthError) {
+            showToast(error.message, 'error');
+        } else {
+            showToast('계정 삭제 중 오류가 발생했습니다.', 'error');
+        }
     }
 }
 
@@ -1974,6 +2011,7 @@ function setupEventListeners() {
 
     // Account
     elements.logoutBtn.addEventListener('click', handleLogout);
+    elements.deleteAccountBtn.addEventListener('click', confirmDeleteAccount);
 
     elements.addFriendBtn.addEventListener('click', openAddFriendModal);
 

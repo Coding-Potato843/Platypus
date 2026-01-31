@@ -589,6 +589,107 @@ export async function updateLastSync(userId) {
 }
 
 /**
+ * Delete user account and all associated data from Supabase
+ * This deletes: photos (storage + db), groups, photo_groups, friendships, users record
+ */
+export async function deleteUserAccount(userId) {
+    // 1. Get all user's photos (for storage deletion and photo_groups)
+    const { data: photos, error: photosError } = await supabase
+        .from('photos')
+        .select('id, url')
+        .eq('user_id', userId);
+
+    if (photosError) {
+        console.error('Error fetching photos for deletion:', photosError);
+    }
+
+    // 2. Delete photos from storage
+    if (photos && photos.length > 0) {
+        const filePaths = photos
+            .map(photo => {
+                const urlParts = photo.url.split('/photos/');
+                return urlParts.length > 1 ? urlParts[1] : null;
+            })
+            .filter(path => path !== null);
+
+        if (filePaths.length > 0) {
+            const { error: storageError } = await supabase.storage
+                .from('photos')
+                .remove(filePaths);
+
+            if (storageError) {
+                console.error('Error deleting photos from storage:', storageError);
+            }
+        }
+
+        // 3. Delete photo_groups (junction table) using photo IDs
+        const photoIds = photos.map(p => p.id);
+        if (photoIds.length > 0) {
+            const { error: pgError } = await supabase
+                .from('photo_groups')
+                .delete()
+                .in('photo_id', photoIds);
+
+            if (pgError) {
+                console.warn('Error deleting photo_groups:', pgError);
+            }
+        }
+    }
+
+    // 4. Delete photos from database
+    const { error: photosDbError } = await supabase
+        .from('photos')
+        .delete()
+        .eq('user_id', userId);
+
+    if (photosDbError) {
+        throw new ApiError(500, `Failed to delete photos: ${photosDbError.message}`);
+    }
+
+    // 5. Delete groups
+    const { error: groupsError } = await supabase
+        .from('groups')
+        .delete()
+        .eq('user_id', userId);
+
+    if (groupsError) {
+        throw new ApiError(500, `Failed to delete groups: ${groupsError.message}`);
+    }
+
+    // 6. Delete friendships (where user is the owner)
+    const { error: friendships1Error } = await supabase
+        .from('friendships')
+        .delete()
+        .eq('user_id', userId);
+
+    if (friendships1Error) {
+        console.warn('Error deleting friendships (user_id):', friendships1Error);
+    }
+
+    // 7. Delete friendships (where user is the friend)
+    const { error: friendships2Error } = await supabase
+        .from('friendships')
+        .delete()
+        .eq('friend_id', userId);
+
+    if (friendships2Error) {
+        console.warn('Error deleting friendships (friend_id):', friendships2Error);
+    }
+
+    // 8. Delete user profile from public.users
+    const { error: userError } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', userId);
+
+    if (userError) {
+        throw new ApiError(500, `Failed to delete user profile: ${userError.message}`);
+    }
+
+    return { success: true };
+}
+
+/**
  * Get user stats (photo count, friend count, storage)
  */
 export async function getUserStats(userId) {
@@ -649,4 +750,5 @@ export default {
     updateUserProfile,
     updateLastSync,
     getUserStats,
+    deleteUserAccount,
 };

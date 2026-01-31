@@ -134,6 +134,37 @@ export async function logout() {
 }
 
 /**
+ * Delete user account
+ * Note: This deletes all user data from public tables.
+ * The auth.users record requires admin privileges or RPC function to delete.
+ */
+export async function deleteAccount() {
+    if (!currentUser) {
+        throw new AuthError('로그인이 필요합니다.');
+    }
+
+    const userId = currentUser.id;
+
+    try {
+        // Import deleteUserAccount dynamically to avoid circular dependency
+        const { deleteUserAccount } = await import('./api.js');
+
+        // Delete all user data from public tables
+        await deleteUserAccount(userId);
+
+        // Sign out the user
+        await supabase.auth.signOut();
+
+        currentUser = null;
+
+        return { success: true };
+    } catch (error) {
+        console.error('Delete account error:', error);
+        throw new AuthError(error.message || '계정 삭제 중 오류가 발생했습니다.');
+    }
+}
+
+/**
  * Check if user is authenticated
  */
 export function isAuthenticated() {
@@ -265,6 +296,7 @@ export default {
     register,
     login,
     logout,
+    deleteAccount,
     isAuthenticated,
     getCurrentUser,
     getCurrentUserProfile,
