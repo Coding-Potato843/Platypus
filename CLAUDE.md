@@ -24,9 +24,9 @@ Photo sharing web app with device sync, group organization, friend sharing, and 
 - **Data Model**: `{ id, url, date, location, groupIds[], author? }`
 
 ### 3. Groups
-- CRUD operations, default groups: Favorites, Travel, Family, Food
+- CRUD operations (no default groups - users create their own)
 - Filter by group, assign photos from detail modal or bulk picker
-- **Data Model**: `{ id, name }`
+- **Data Model**: `{ id (uuid), name }`
 
 ### 4. Search & Filter
 - Location (case-insensitive partial match), date range picker
@@ -50,13 +50,19 @@ Photo sharing web app with device sync, group organization, friend sharing, and 
 
 ## Database Schema (5 Tables)
 
+> **Important**: Supabase uses two separate user tables:
+> - `auth.users` - Managed by Supabase Auth (email, password, login)
+> - `public.users` - App profile data (username, avatar, etc.)
+>
+> Login uses `auth.users`, but app features (groups, photos) reference `public.users.id` via foreign keys.
+
 ### users
 | Column | Type | Description |
 |--------|------|-------------|
 | id | uuid | PK, same as auth.users.id |
 | email | text | UNIQUE, NOT NULL |
-| username | text | Display name |
-| user_id | text | UNIQUE handle (@username) |
+| username | text | NOT NULL, Display name |
+| user_id | text | NOT NULL, UNIQUE handle (@username) |
 | avatar_url | text | Profile image URL |
 | created_at | timestamp | Join date |
 | last_sync_at | timestamp | Last photo sync |
@@ -86,19 +92,34 @@ Photo sharing web app with device sync, group organization, friend sharing, and 
 - `id`, `user_id`, `friend_id`, `created_at`
 - UNIQUE constraint on (user_id, friend_id)
 
-**Auto-create user profile trigger:**
+**Auto-create user profile trigger** (required for new user registration):
 ```sql
+-- Create trigger function (extracts username from email)
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
-  insert into public.users (id, email) values (new.id, new.email);
+  insert into public.users (id, email, username, user_id)
+  values (
+    new.id,
+    new.email,
+    split_part(new.email, '@', 1),
+    split_part(new.email, '@', 1)
+  );
   return new;
 end;
 $$ language plpgsql security definer;
 
+-- Create trigger
+drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- Backfill existing auth users who don't have a public.users record
+insert into public.users (id, email, username, user_id)
+select id, email, split_part(email, '@', 1), split_part(email, '@', 1)
+from auth.users
+where id not in (select id from public.users);
 ```
 
 ---
@@ -246,10 +267,17 @@ if (elements.appContainer.style.display === 'block') {
 - Supabase integration (Auth, Photos, Groups, Friends, User, Storage)
 - RLS policy SQL files
 - Profile edit, friend search/add, photo download, pagination
+- Group filtering fix (dynamic DOM query for group chips)
 
-### Pending ⚠️
-- Run `supabase_rls_setup.sql` in Supabase SQL Editor
-- Enable RLS on all tables (users, photos, groups, photo_groups, friendships)
+### Required Setup ⚠️
+Run these in **Supabase SQL Editor** before using the app:
+
+1. **User profile trigger** (see "Auto-create user profile trigger" above)
+   - Creates `public.users` record when user signs up
+   - Backfills existing `auth.users` who don't have profiles
+
+2. **RLS policies** - Run `supabase_rls_setup.sql`
+   - Enable RLS on all tables (users, photos, groups, photo_groups, friendships)
 
 ---
 
@@ -280,3 +308,5 @@ Login/signup page displays a random background image from `Frontend/background_i
 - Photo storage: Supabase Storage (Public bucket, 50MB limit)
 - RLS must be enabled for data security
 - Email confirmation may be required (depends on Supabase settings)
+- Groups use UUID as id (not string) - all group IDs from database are UUIDs
+- No default groups are created automatically - users create their own groups

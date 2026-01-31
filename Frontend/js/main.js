@@ -125,7 +125,6 @@ async function loadPhotos(loadMore = false) {
 
 /**
  * Load user's groups from Supabase
- * If no groups exist, create default groups for new users
  */
 async function loadGroups() {
     const user = getCurrentUser();
@@ -133,26 +132,7 @@ async function loadGroups() {
 
     try {
         const groups = await getGroups(user.id);
-
-        if (groups.length > 0) {
-            state.groups = groups;
-        } else {
-            // Create default groups for new users
-            const defaultGroups = ['즐겨찾기', '여행', '가족', '음식'];
-            const createdGroups = [];
-
-            for (const name of defaultGroups) {
-                try {
-                    const newGroup = await apiCreateGroup(user.id, name);
-                    createdGroups.push(newGroup);
-                } catch (err) {
-                    console.warn(`Failed to create default group "${name}":`, err);
-                }
-            }
-
-            state.groups = createdGroups;
-        }
-
+        state.groups = groups;
         updateGroupChips();
     } catch (error) {
         console.error('Failed to load groups:', error);
@@ -980,7 +960,8 @@ function switchTab(tabId) {
 function filterByGroup(groupId) {
     state.currentGroup = groupId;
 
-    elements.groupChips.forEach(chip => {
+    // Query current DOM elements (they are dynamically recreated by updateGroupChips)
+    document.querySelectorAll('.group-chip').forEach(chip => {
         chip.classList.toggle('active', chip.dataset.group === groupId);
     });
 
