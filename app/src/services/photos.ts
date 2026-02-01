@@ -1,14 +1,15 @@
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
 import { supabase } from '../config/supabase';
 import { PhotoAsset } from '../types';
 import { reverseGeocode } from './geocoding';
 
 /**
- * Request media library permission
+ * Request media library permission (including media location for EXIF GPS data)
  */
 export async function requestMediaLibraryPermission(): Promise<boolean> {
-  const { status } = await MediaLibrary.requestPermissionsAsync();
+  // Request full media library permission including ACCESS_MEDIA_LOCATION
+  const { status } = await MediaLibrary.requestPermissionsAsync(true);
   return status === 'granted';
 }
 
@@ -38,10 +39,23 @@ export async function fetchPhotosAfterDate(
         continue;
       }
 
-      // Get EXIF data for GPS coordinates
-      const assetInfo = await MediaLibrary.getAssetInfoAsync(asset, {
-        shouldDownloadFromNetwork: false,
-      });
+      // Get EXIF data for GPS coordinates (may fail if ACCESS_MEDIA_LOCATION denied)
+      let exifData: PhotoAsset['exif'] = undefined;
+      try {
+        const assetInfo = await MediaLibrary.getAssetInfoAsync(asset, {
+          shouldDownloadFromNetwork: false,
+        });
+        if (assetInfo.exif) {
+          exifData = {
+            DateTimeOriginal: assetInfo.exif.DateTimeOriginal as string | undefined,
+            GPSLatitude: assetInfo.exif.GPSLatitude as number | undefined,
+            GPSLongitude: assetInfo.exif.GPSLongitude as number | undefined,
+          };
+        }
+      } catch (exifError) {
+        // EXIF access failed - continue without location data
+        console.warn(`EXIF read failed for ${asset.filename}:`, exifError);
+      }
 
       const photoAsset: PhotoAsset = {
         id: asset.id,
@@ -52,11 +66,7 @@ export async function fetchPhotosAfterDate(
         width: asset.width,
         height: asset.height,
         mediaType: asset.mediaType,
-        exif: assetInfo.exif ? {
-          DateTimeOriginal: assetInfo.exif.DateTimeOriginal as string | undefined,
-          GPSLatitude: assetInfo.exif.GPSLatitude as number | undefined,
-          GPSLongitude: assetInfo.exif.GPSLongitude as number | undefined,
-        } : undefined,
+        exif: exifData,
         selected: true, // Pre-selected by default
         location: null,
       };
@@ -91,7 +101,7 @@ export async function uploadPhoto(
 ): Promise<void> {
   // Read file as base64
   const base64 = await FileSystem.readAsStringAsync(photo.uri, {
-    encoding: FileSystem.EncodingType.Base64,
+    encoding: 'base64',
   });
 
   // Convert to Uint8Array

@@ -445,16 +445,26 @@ See `app/app_description.txt` for detailed documentation.
 ```bash
 cd app
 npm install --legacy-peer-deps   # Install dependencies
-npx expo start --tunnel          # Mobile (QR code)
-npx expo start --web             # Web browser
-npx expo export --platform web   # Build for web
+npx expo start --tunnel          # Development server (QR code)
+eas build --profile development --platform android  # Build dev APK
 ```
+
+### EAS Build (Development APK)
+Expo Go has limitations with media library access. Use EAS Build for full functionality:
+```bash
+npm install -g eas-cli           # Install EAS CLI
+eas login                        # Login to Expo account
+eas build:configure              # First-time setup
+eas build --profile development --platform android  # Build APK
+```
+APK is downloaded from Expo dashboard after build completes.
 
 ### Known Issues (Windows)
 - **node:sea error**: Expo SDK 50 had Windows path issues. Resolved by upgrading to SDK 54.
 - **Port conflicts**: Kill all `node.exe` processes before restarting Expo.
 - **Dependency conflicts**: Use `--legacy-peer-deps` flag when installing.
 - **React Native version mismatch**: Expo Go requires matching React Native version. SDK 54 uses RN 0.81.5.
+- **expo-file-system deprecated API**: Use `expo-file-system/legacy` for `readAsStringAsync`.
 
 ### Tech Stack
 - Expo SDK 54.0.33
@@ -462,10 +472,25 @@ npx expo export --platform web   # Build for web
 - TypeScript
 - React Navigation v7
 - SafeAreaProvider for proper layout
+- EAS Build for development APK
 - Same Supabase backend as web
+
+### Android Permissions (app.json)
+```json
+"permissions": [
+  "READ_EXTERNAL_STORAGE",
+  "READ_MEDIA_IMAGES",
+  "ACCESS_MEDIA_LOCATION",  // Required for GPS EXIF data
+  ...
+]
+```
+`isAccessMediaLocationEnabled: true` in expo-media-library plugin config.
 
 ### Current Status
 - ✅ Login/Logout working
 - ✅ Auth state persistence (AsyncStorage)
-- ⚠️ Gallery scan button not working (Expo Go limitation - needs development build for full media access)
+- ✅ Gallery auto-scan (development build)
+- ✅ Photo upload to Supabase
+- ✅ EXIF extraction (date, GPS)
+- ✅ Reverse geocoding (GPS → location name)
 - ❌ Background sync not planned (manual sync only)

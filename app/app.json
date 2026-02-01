@@ -29,7 +29,15 @@
       "package": "com.platypus.mobile",
       "permissions": [
         "READ_EXTERNAL_STORAGE",
-        "READ_MEDIA_IMAGES"
+        "READ_MEDIA_IMAGES",
+        "ACCESS_MEDIA_LOCATION",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.ACCESS_MEDIA_LOCATION"
       ]
     },
     "plugins": [
@@ -37,9 +45,15 @@
         "expo-media-library",
         {
           "photosPermission": "사진을 동기화하려면 갤러리 접근 권한이 필요합니다.",
-          "savePhotosPermission": "사진을 저장하려면 갤러리 접근 권한이 필요합니다."
+          "savePhotosPermission": "사진을 저장하려면 갤러리 접근 권한이 필요합니다.",
+          "isAccessMediaLocationEnabled": true
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ff6ec3de-f59b-446c-8f42-9c3d7fdf792d"
+      }
+    }
   }
 }

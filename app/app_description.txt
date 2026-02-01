@@ -141,6 +141,16 @@ app/
 ### Android (app.json)
 - `READ_EXTERNAL_STORAGE`: Legacy storage access
 - `READ_MEDIA_IMAGES`: Android 13+ media access
+- `ACCESS_MEDIA_LOCATION`: Required for reading GPS data from photo EXIF
+
+### expo-media-library Plugin Config
+```json
+{
+  "photosPermission": "사진을 동기화하려면 갤러리 접근 권한이 필요합니다.",
+  "savePhotosPermission": "사진을 저장하려면 갤러리 접근 권한이 필요합니다.",
+  "isAccessMediaLocationEnabled": true
+}
+```
 
 ---
 
@@ -203,6 +213,27 @@ npm run ios
 rm -rf node_modules package-lock.json .expo
 npm install --legacy-peer-deps
 ```
+
+## EAS Build (Development APK)
+
+Expo Go has limitations with media library access on Android.
+Use EAS Build to create a development APK with full permissions:
+
+```bash
+# Install EAS CLI globally
+npm install -g eas-cli
+
+# Login to Expo account
+eas login
+
+# Configure EAS (first time only)
+eas build:configure
+
+# Build development APK for Android
+eas build --profile development --platform android
+```
+
+After build completes, download the APK from Expo dashboard and install on device.
 
 ---
 
@@ -269,7 +300,17 @@ npm install --legacy-peer-deps
 6. **Expo Go media library limitation**
    - Warning: "Expo Go can no longer provide full access to the media library"
    - Cause: Android permission changes
-   - Solution: Create a development build for full functionality
+   - Solution: Use EAS Build to create development APK
+
+7. **ACCESS_MEDIA_LOCATION permission error**
+   - Error: "Cannot access ExifInterface because of missing ACCESS_MEDIA_LOCATION permission"
+   - Cause: Android requires explicit permission for GPS EXIF data
+   - Solution: Add `ACCESS_MEDIA_LOCATION` to permissions and `isAccessMediaLocationEnabled: true` in expo-media-library plugin
+
+8. **expo-file-system deprecated API**
+   - Error: "Method readAsStringAsync imported from expo-file-system is deprecated"
+   - Cause: expo-file-system v19 changed API
+   - Solution: Import from `expo-file-system/legacy` instead
 
 ### Useful Commands
 ```bash
@@ -291,29 +332,29 @@ npx serve dist
 
 ## Current Status
 
-### Working
+### Working (Development Build)
 - ✅ Login/Logout with Supabase Auth
 - ✅ Auth state persistence (AsyncStorage)
 - ✅ Navigation between screens
 - ✅ Dark theme UI matching web
+- ✅ Gallery auto-scan (expo-media-library)
+- ✅ EXIF extraction (date, GPS coordinates)
+- ✅ ACCESS_MEDIA_LOCATION permission for GPS data
+- ✅ Photo upload to Supabase Storage
+- ✅ Reverse geocoding (GPS → location name)
+- ✅ Incremental sync (only photos after last_sync_at)
 
-### Known Limitations
-- ⚠️ **Gallery scan not working in Expo Go**: Android permission changes require a development build for full media library access
-- ⚠️ **Manual sync only**: Background sync is NOT planned
-
-### To Test Full Functionality
-Gallery scan requires a **development build** instead of Expo Go:
-```bash
-npx expo install expo-dev-client
-npx expo run:android
-```
+### Notes
+- **Development build required**: Expo Go has limitations with media library access
+- **Manual sync only**: Background sync is NOT planned
+- **expo-file-system/legacy**: Uses legacy API for `readAsStringAsync`
 
 ---
 
 ## Future Enhancements (TODO)
 
-- [ ] Create development build for full media access
 - [ ] Photo preview before upload (full-screen view)
 - [ ] Settings screen (data usage options)
 - [ ] Group assignment during sync
 - [ ] Offline queue for poor connectivity
+- [ ] iOS development build
