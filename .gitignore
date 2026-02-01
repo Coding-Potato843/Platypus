@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Expo
+app/.expo/
+app/dist/
+
+# Build outputs
+*.log
+*.tsbuildinfo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+
+# Environment (if any)
+.env
+.env.local
+.env.*.local

@@ -128,7 +128,7 @@ where id not in (select id from public.users);
 ## File Structure
 ```
 Project_02_Platypus/
-├── Frontend/
+├── Frontend/                    # Web frontend (Vanilla JS)
 │   ├── index.html
 │   ├── css/styles.css
 │   ├── js/
@@ -139,10 +139,17 @@ Project_02_Platypus/
 │   │   └── utils/
 │   │       └── exif.js          # EXIF parser & reverse geocoding
 │   └── background_image/
-│       ├── images.json          # Background image list (edit this to add/remove images)
+│       ├── images.json          # Background image list
 │       └── *.png                # Background image files
+├── app/                         # Mobile app (React Native + Expo)
+│   ├── package.json             # Dependencies (Expo SDK 54)
+│   ├── app.json                 # Expo config
+│   ├── App.tsx                  # Entry point
+│   ├── app_description.txt      # Mobile app documentation
+│   └── src/                     # Source code (screens, services, components)
 ├── supabase_rls_setup.sql       # Table RLS policies
 ├── supabase_storage_setup.sql   # Storage policies (reference)
+├── .gitignore                   # Excludes node_modules, .expo, dist
 └── CLAUDE.md
 ```
 
@@ -418,3 +425,39 @@ Login/signup page displays a random background image from `Frontend/background_i
 - Email confirmation may be required (depends on Supabase settings)
 - Groups use UUID as id (not string) - all group IDs from database are UUIDs
 - No default groups are created automatically - users create their own groups
+
+---
+
+## Mobile App (Expo)
+
+### Overview
+React Native (Expo SDK 54) companion app for native gallery sync.
+See `app/app_description.txt` for detailed documentation.
+
+### Key Features
+- Login with existing Platypus account (Supabase Auth)
+- Native gallery access (expo-media-library)
+- Incremental sync (only photos after `last_sync_at`)
+- Pre-selected photos (user deselects unwanted)
+- Reverse geocoding (GPS → location name)
+
+### Development Commands
+```bash
+cd app
+npm install --legacy-peer-deps   # Install dependencies
+npx expo start --tunnel          # Mobile (QR code)
+npx expo start --web             # Web browser
+npx expo export --platform web   # Build for web
+```
+
+### Known Issues (Windows)
+- **node:sea error**: Expo SDK 50 had Windows path issues. Resolved by upgrading to SDK 54.
+- **Port conflicts**: Kill all `node.exe` processes before restarting Expo.
+- **Dependency conflicts**: Use `--legacy-peer-deps` flag when installing.
+
+### Tech Stack
+- Expo SDK 54
+- React 19 + React Native 0.77
+- TypeScript
+- React Navigation v7
+- Same Supabase backend as web

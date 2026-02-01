@@ -1,0 +1,283 @@
+# Platypus Mobile App - Technical Documentation
+
+## Overview
+React Native (Expo) companion app for the Platypus photo sharing web service.
+Enables automatic photo sync from device gallery to Supabase.
+
+---
+
+## Tech Stack
+- **Framework**: React Native + Expo SDK 54
+- **Language**: TypeScript
+- **React**: 19.1.0
+- **React Native**: 0.77.0
+- **Backend**: Supabase (same as web frontend)
+- **Navigation**: React Navigation v7
+- **State**: React hooks (useAuth custom hook)
+
+---
+
+## Supabase Configuration
+```typescript
+SUPABASE_URL = 'https://vtpgatnkobvjqwvoqtad.supabase.co'
+SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+```
+Same credentials as web frontend. Uses AsyncStorage for session persistence.
+
+---
+
+## File Structure
+```
+app/
+├── package.json                # Dependencies
+├── app.json                    # Expo config (permissions, icons)
+├── tsconfig.json               # TypeScript config
+├── babel.config.js             # Babel config
+├── App.tsx                     # Entry point (navigation + auth routing)
+├── src/
+│   ├── config/
+│   │   └── supabase.ts         # Supabase client (AsyncStorage session)
+│   ├── types/
+│   │   └── index.ts            # TypeScript types (User, Photo, etc.)
+│   ├── hooks/
+│   │   └── useAuth.ts          # Auth state hook (login, logout, profile)
+│   ├── services/
+│   │   ├── auth.ts             # Auth functions (login, logout, getSession)
+│   │   ├── photos.ts           # Photo upload (gallery scan, upload to Supabase)
+│   │   └── geocoding.ts        # Reverse geocoding (GPS → location name)
+│   ├── components/
+│   │   ├── LoadingOverlay.tsx  # Full-screen loading modal
+│   │   └── PhotoGrid.tsx       # Photo grid with selection checkmarks
+│   └── screens/
+│       ├── LoginScreen.tsx     # Email/password login form
+│       └── SyncScreen.tsx      # Main sync UI (scan, select, upload)
+└── assets/
+    ├── icon.png                # App icon (1024x1024)
+    ├── splash.png              # Splash screen
+    └── adaptive-icon.png       # Android adaptive icon
+```
+
+---
+
+## Core Features
+
+### 1. Authentication (LoginScreen.tsx)
+- Email/password login via Supabase Auth
+- Session persistence via AsyncStorage
+- Korean UI text
+- Auto-navigation to SyncScreen on successful login
+
+### 2. Gallery Sync (SyncScreen.tsx)
+
+**Workflow:**
+1. User taps "갤러리 스캔" button
+2. App requests gallery permission (expo-media-library)
+3. Scans all photos from device
+4. Filters: only photos with `creationTime > last_sync_at`
+5. Displays in grid with ALL photos PRE-SELECTED
+6. User taps to DESELECT unwanted photos
+7. User taps "업로드" button
+8. Photos uploaded to Supabase Storage + Database
+9. `last_sync_at` updated in user profile
+
+**Key UX:**
+- Photos are selected by DEFAULT (checkmark visible)
+- Tap to DESELECT (opposite of typical gallery pickers)
+- "전체 선택" / "전체 해제" buttons for bulk operations
+- Progress indicator during upload
+
+### 3. Photo Upload (services/photos.ts)
+
+**Upload Flow:**
+```
+1. Read photo as base64 (FileSystem.readAsStringAsync)
+2. Convert to Uint8Array
+3. Upload to Supabase Storage: {userId}/{timestamp}_{random}.{ext}
+4. Get public URL
+5. Insert record to 'photos' table with metadata:
+   - user_id
+   - url (public URL)
+   - date_taken (from EXIF or file creationTime)
+   - location (from reverse geocoding, if GPS available)
+```
+
+### 4. Reverse Geocoding (services/geocoding.ts)
+- Uses OpenStreetMap Nominatim API (free, no API key)
+- Rate limited: 1 request per second
+- Converts GPS coordinates → location name
+- Example: (37.5665, 126.9780) → "서울특별시, 중구"
+- Results cached to reduce API calls
+
+---
+
+## Database Schema (Same as Web)
+
+### users table
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid | PK (same as auth.users.id) |
+| email | text | User email |
+| username | text | Display name |
+| last_sync_at | timestamp | Last sync time (CRITICAL for incremental sync) |
+
+### photos table
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid | PK |
+| user_id | uuid | FK → users.id |
+| url | text | Photo URL from Storage |
+| date_taken | timestamp | When photo was taken |
+| location | text | Location name |
+| created_at | timestamp | Upload time |
+
+---
+
+## Permissions
+
+### iOS (app.json)
+- `NSPhotoLibraryUsageDescription`: Gallery access for sync
+
+### Android (app.json)
+- `READ_EXTERNAL_STORAGE`: Legacy storage access
+- `READ_MEDIA_IMAGES`: Android 13+ media access
+
+---
+
+## UI Theme (Match Web)
+- Background: `#0f172a` (slate-900)
+- Card: `#1e293b` (slate-800)
+- Primary: `#06b6d4` (cyan-500)
+- Text: `#f1f5f9` (slate-100)
+- Border: `#334155` (slate-700)
+- Error: `#ef4444` (red-500)
+
+---
+
+## Key TypeScript Types
+
+```typescript
+interface PhotoAsset {
+  id: string;
+  uri: string;               // Local file URI
+  filename: string;
+  creationTime: number;      // Timestamp (ms)
+  exif?: {
+    DateTimeOriginal?: string;
+    GPSLatitude?: number;
+    GPSLongitude?: number;
+  };
+  selected: boolean;         // UI selection state
+  location?: string | null;  // Reverse geocoded location
+}
+
+interface UserProfile {
+  id: string;
+  email: string;
+  username: string;
+  last_sync_at: string | null;  // ISO date string
+}
+```
+
+---
+
+## Development Commands
+
+```bash
+# Install dependencies
+cd app
+npm install
+
+# Start Expo dev server
+npm start
+# or
+npx expo start
+
+# Run on Android
+npm run android
+
+# Run on iOS (Mac only)
+npm run ios
+```
+
+---
+
+## Testing Checklist
+
+1. **Login**: Use existing Platypus web account
+2. **Permission**: Grant gallery access when prompted
+3. **Scan**: Tap "갤러리 스캔" to load photos
+4. **Selection**: Verify photos are pre-selected, tap to deselect
+5. **Upload**: Tap "업로드" and watch progress
+6. **Verify on Web**: Login to web frontend, check uploaded photos appear
+7. **Incremental Sync**: Upload again, verify only NEW photos shown
+
+---
+
+## Important Notes
+
+1. **Same Supabase Database**: Photos uploaded from this app appear on web gallery
+2. **RLS Enabled**: Users can only access their own data
+3. **last_sync_at**: Critical for incremental sync - only syncs photos newer than this timestamp
+4. **Storage Path**: `{userId}/{timestamp}_{random}.{ext}` (same pattern as web)
+5. **No Registration**: Users must register on web first, then login via app
+
+---
+
+## Error Handling
+
+- **Permission Denied**: Alert with clear message, retry option
+- **Upload Failure**: Individual photo failures logged, continue with others
+- **Network Error**: Toast/Alert with error message
+- **Empty Gallery**: Message "새로운 사진이 없습니다"
+
+---
+
+## Development Notes (Windows)
+
+### Known Issues & Solutions
+
+1. **node:sea path error (Expo SDK 50)**
+   - Windows doesn't allow colons in directory names
+   - Solution: Upgrade to Expo SDK 54
+
+2. **Port 8081 already in use**
+   - Previous Expo process still running
+   - Solution: Kill all node.exe in Task Manager, or PowerShell:
+     ```powershell
+     Get-Process -Name node | Stop-Process -Force
+     ```
+
+3. **Dependency conflicts (peer deps)**
+   - React 19 vs React Native peer dependency issues
+   - Solution: Use `npm install --legacy-peer-deps`
+
+4. **babel-preset-expo not found**
+   - Missing after dependency reinstall
+   - Solution: `npm install babel-preset-expo --legacy-peer-deps`
+
+### Useful Commands
+```bash
+# Clean reinstall
+rm -rf node_modules package-lock.json
+npm install --legacy-peer-deps
+
+# Clear cache and start
+npx expo start --clear
+
+# Build for web (test compilation)
+npx expo export --platform web
+
+# Serve built web app
+npx serve dist
+```
+
+---
+
+## Future Enhancements (TODO)
+
+- [ ] Background sync (auto-upload when new photos detected)
+- [ ] Push notifications when sync completes
+- [ ] Photo preview before upload (full-screen view)
+- [ ] Settings screen (sync frequency, data usage options)
+- [ ] Group assignment during sync
+- [ ] Offline queue for poor connectivity

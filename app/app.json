@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "Platypus",
+    "slug": "platypus-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f172a"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.platypus.mobile",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "사진을 동기화하려면 갤러리 접근 권한이 필요합니다."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0f172a"
+      },
+      "package": "com.platypus.mobile",
+      "permissions": [
+        "READ_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "사진을 동기화하려면 갤러리 접근 권한이 필요합니다.",
+          "savePhotosPermission": "사진을 저장하려면 갤러리 접근 권한이 필요합니다."
+        }
+      ]
+    ]
+  }
+}
