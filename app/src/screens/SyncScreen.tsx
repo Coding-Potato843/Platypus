@@ -237,7 +237,7 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
 
       {/* Last sync info */}
       <View style={styles.syncInfo}>
-        <Text style={styles.syncLabel}>마지막 동기화</Text>
+        <Text style={styles.syncLabel}>마지막 스캔 날짜</Text>
         <Text style={styles.syncDate}>{formatDate(lastSyncDate)}</Text>
       </View>
 

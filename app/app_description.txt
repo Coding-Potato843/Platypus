@@ -120,7 +120,7 @@ app/
 
 **DateRangePicker.tsx:**
 - Year/Month scroll list selection (not native calendar)
-- Increment/Decrement buttons: "−1년", "+1년", "−1개월", "+1개월"
+- Cancel button (red, left) / Confirm button (sky blue, right) at bottom
 - Future date prevention (max = current date)
 - No native module dependency (works in Expo Go)
 
@@ -129,23 +129,37 @@ app/
 **Key Functions:**
 
 1. **`fetchPhotosAfterDate(afterDate)`** - Auto scan
-   - Fetches photos with `creationTime > afterDate`
+   - Scans ALL albums including Downloads, Telegram, WhatsApp, KakaoTalk
+   - Uses `modificationTime` (not `creationTime`) for filtering
+   - Camera photos: modificationTime ≈ creationTime
+   - Downloaded images: modificationTime = download time
    - Pre-selects all photos (`selected: true`)
-   - Used by "갤러리 스캔" button
+   - Deduplicates across albums using Map
 
-2. **`fetchAllPhotos(options)`** - Manual picker (NEW)
+2. **`fetchAllPhotos(options)`** - Manual picker
    - Fetches all photos with pagination (50 per batch)
+   - Scans all albums on first page load (`includeAllAlbums: true`)
    - Supports native date filtering: `createdAfter`, `createdBefore`
    - Does NOT pre-select photos (`selected: false`)
    - Returns `{ photos, hasNextPage, endCursor }`
+
+**Scanned Albums:**
+```javascript
+['download', 'downloads', '다운로드', 'telegram', 'whatsapp', 'kakaotalk']
+```
 
 3. **`uploadPhoto(userId, photo)`** - Single upload
    - Read photo as base64 (FileSystem.readAsStringAsync)
    - Convert to Uint8Array
    - Upload to Supabase Storage: `{userId}/{timestamp}_{random}.{ext}`
    - Get public URL
+   - Determine date_taken (priority: EXIF > modificationTime > creationTime > now)
    - Reverse geocode if GPS available
    - Insert record to 'photos' table
+
+**Upload Date Priority:**
+Downloaded images often lack EXIF data and may have invalid creationTime (0 = 1970-01-01).
+Priority order: EXIF DateTimeOriginal > modificationTime > creationTime > current time
 
 4. **`uploadPhotos(userId, photos, onProgress)`** - Batch upload
    - Sequential upload with progress tracking
@@ -307,8 +321,10 @@ After build completes, download the APK from Expo dashboard and install on devic
 5. **Upload**: Tap "업로드" and watch progress
 6. **Verify on Web**: Login to web frontend, check uploaded photos appear
 7. **Incremental Sync**: Upload again, verify only NEW photos shown
+8. **Downloaded Images**: Verify images from Downloads folder appear in scan
+9. **Messenger Images**: Verify images from Telegram/WhatsApp/KakaoTalk appear
 
-### Gallery Picker ("갤러리에서 선택") - NEW
+### Gallery Picker ("갤러리에서 선택")
 1. **Open Picker**: Tap "갤러리에서 선택" to open modal
 2. **Infinite Scroll**: Scroll down to load more photos
 3. **Date Filter**: Set start/end date, verify filtered results
@@ -317,6 +333,13 @@ After build completes, download the APK from Expo dashboard and install on devic
 6. **Confirm**: Tap "선택 완료" to add to main list
 7. **Upload**: Verify selected photos upload correctly
 8. **Old Photos**: Confirm photos before `last_sync_at` can be selected
+9. **Downloaded Images**: Verify downloaded images appear in picker
+
+### Downloaded Image Date Handling
+1. **Download Image**: Download an image from the internet
+2. **Scan/Pick**: Include the downloaded image in upload
+3. **Upload**: Upload the downloaded image
+4. **Verify Date**: Check on web that date is download time (NOT 1970-01-01)
 
 ---
 
@@ -414,16 +437,19 @@ npx serve dist
 - ✅ Photo upload to Supabase Storage
 - ✅ Reverse geocoding (GPS → location name)
 - ✅ Incremental sync (only photos after last_sync_at)
-- ✅ **Gallery Picker Modal** - Select any photos regardless of sync date (NEW)
-- ✅ **Date Range Filter** - Year/month selection with native-level filtering (NEW)
-- ✅ **Location Search** - Text-based location filtering (NEW)
-- ✅ **Custom DateRangePicker** - No native module dependency (NEW)
+- ✅ **Gallery Picker Modal** - Select any photos regardless of sync date
+- ✅ **Date Range Filter** - Year/month selection with native-level filtering
+- ✅ **Location Search** - Text-based location filtering
+- ✅ **Custom DateRangePicker** - No native module dependency
+- ✅ **All Albums Scan** - Includes Downloads, Telegram, WhatsApp, KakaoTalk
+- ✅ **Downloaded Image Support** - Proper date handling using modificationTime
 
 ### Notes
 - **Development build required**: Expo Go has limitations with media library access
 - **Manual sync only**: Background sync is NOT planned
 - **expo-file-system/legacy**: Uses legacy API for `readAsStringAsync`
 - **Gallery Picker works in Expo Go**: DateRangePicker is pure JS, no native modules
+- **modificationTime**: Used for filtering instead of creationTime to catch downloaded images
 
 ---
 
@@ -441,3 +467,6 @@ npx serve dist
 - [x] **Date Range Filter** - Native-level date filtering
 - [x] **Location Search** - Client-side text filtering
 - [x] **Custom Date Picker** - Year/month scroll selection without native modules
+- [x] **All Albums Scan** - Downloads, Telegram, WhatsApp, KakaoTalk support
+- [x] **Downloaded Image Date Fix** - Uses modificationTime for proper dating
+- [x] **UI Cleanup** - Removed camera icon, filter icon; streamlined date picker buttons

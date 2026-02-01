@@ -498,19 +498,21 @@ APK is downloaded from Expo dashboard after build completes.
 - ✅ **Gallery Picker** - Select photos from before last sync date
 - ✅ **Date Range Filter** - Year/month direct selection for date filtering
 - ✅ **Location Search** - Location name text search
+- ✅ **All Albums Scan** - Includes Downloads, Telegram, WhatsApp, KakaoTalk folders
+- ✅ **Downloaded Image Support** - Uses modificationTime for proper date handling
 - ❌ Background sync not planned (manual sync only)
 
-### Gallery Picker Feature (NEW)
+### Gallery Picker Feature
 Feature to manually select photos from the gallery, allowing upload of images from before `last_sync_at`.
 
 **Two Sync Methods:**
-1. **Gallery Scan** - Existing method. Auto-scans only photos after `last_sync_at`
+1. **Gallery Scan** - Auto-scans photos after `last_sync_at` (uses `modificationTime`)
 2. **Select from Gallery** - Manual selection from entire gallery with date/location filtering
 
 **Components:**
 - `GalleryPickerModal.tsx` - Full gallery modal (infinite scroll, filtering)
-- `DateRangePicker.tsx` - Year/month direct selection (scroll list + increment/decrement buttons)
-- `FilterBar.tsx` - Collapsible filter UI
+- `DateRangePicker.tsx` - Year/month direct selection (scroll list only)
+- `FilterBar.tsx` - Collapsible filter UI (no icon)
 
 **Filtering:**
 - **Date Range**: Uses MediaLibrary API's `createdAfter`/`createdBefore` options (native level filtering)
@@ -518,5 +520,27 @@ Feature to manually select photos from the gallery, allowing upload of images fr
 
 **Date Picker UI:**
 - Year/month scroll lists for direct selection
-- "-1 Year", "+1 Year", "-1 Month", "+1 Month" buttons for quick adjustment
+- Cancel button (red, left) / Confirm button (sky blue, right) at bottom
 - No native modules required (works in Expo Go)
+
+### All Albums Scanning
+Both auto-scan and gallery picker scan ALL albums including special folders:
+- Downloads / 다운로드
+- Telegram
+- WhatsApp
+- KakaoTalk
+
+**Technical Details:**
+- Uses `modificationTime` instead of `creationTime` for filtering
+- Camera photos: modificationTime ≈ creationTime
+- Downloaded images: modificationTime = download time
+- Deduplicates photos across albums using Map
+
+### Upload Date Handling
+Date priority when uploading photos:
+1. **EXIF DateTimeOriginal** - Camera photo capture time
+2. **modificationTime** - Download/add time (for downloaded images)
+3. **creationTime** - File creation time
+4. **Current time** - Fallback if all timestamps invalid
+
+This fixes the "1970-01-01" bug for downloaded images that lack EXIF data.

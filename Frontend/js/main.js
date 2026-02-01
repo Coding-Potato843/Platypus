@@ -318,7 +318,6 @@ const elements = {
     syncPreviewState: document.getElementById('syncPreviewState'),
     syncUploadState: document.getElementById('syncUploadState'),
     selectPhotosBtn: document.getElementById('selectPhotosBtn'),
-    lastSyncInfo: document.getElementById('lastSyncInfo'),
     syncPhotoCount: document.getElementById('syncPhotoCount'),
     syncGallery: document.getElementById('syncGallery'),
     selectAllBtn: document.getElementById('selectAllBtn'),
@@ -1175,14 +1174,6 @@ function openSyncModal() {
     elements.syncPreviewState.style.display = 'none';
     elements.syncUploadState.style.display = 'none';
     elements.importPhotosBtn.disabled = true;
-
-    // Update last sync info
-    const profile = getCurrentUserProfile();
-    if (state.lastSyncDate) {
-        elements.lastSyncInfo.textContent = `마지막 동기화: ${formatDateTime(state.lastSyncDate)}`;
-    } else {
-        elements.lastSyncInfo.textContent = '아직 동기화한 적이 없습니다';
-    }
 
     openModal(elements.syncModal);
 }
