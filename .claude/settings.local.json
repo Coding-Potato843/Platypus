@@ -4,7 +4,22 @@
       "Bash(git add:*)",
       "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd complete account deletion with auth.users removal via RPC\n\n- Complete account deletion now removes user from both public.users and auth.users\n- Added delete_user_auth\\(\\) RPC function for auth.users deletion\n- Updated deleteUserAccount\\(\\) in api.js with RPC call\n- Translated CLAUDE.md to English\n- Documented account deletion flow and required RLS policies\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(git commit -m \"$\\(cat <<''EOF''\n역지오코딩 기능 추가 \\(GPS 좌표 → 지역명 변환\\)\n\n- OpenStreetMap Nominatim API를 사용한 역지오코딩 구현\n- GPS 좌표를 시/구 단위 지역명으로 변환 \\(예: 서울특별시, 강남구\\)\n- API 호출 결과 캐싱으로 중복 요청 방지\n- Rate limiting 적용 \\(1초당 1요청\\)\n- CLAUDE.md 문서 업데이트 \\(Photo Sync Flow, exif.js API 추가\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(dir:*)",
+      "Bash(npm install:*)",
+      "Bash(npm start)",
+      "Bash(npx expo start --tunnel)",
+      "Bash(taskkill:*)",
+      "Bash(pkill:*)",
+      "Bash(tasklist:*)",
+      "Bash(findstr:*)",
+      "Bash(cmd.exe /c \"taskkill /f /im node.exe\")",
+      "Bash(npx expo install:*)",
+      "Bash(npx expo start)",
+      "Bash(timeout:*)",
+      "Bash(npx expo:*)",
+      "Bash(eas build:configure:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nMobile app: Gallery scan & upload working with EAS Build\n\n- Add ACCESS_MEDIA_LOCATION permission for GPS EXIF data\n- Configure expo-media-library with isAccessMediaLocationEnabled\n- Fix expo-file-system deprecated API \\(use legacy import\\)\n- Add EAS Build configuration for development APK\n- Update documentation with current status and build instructions\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
     ]
   }
 }

@@ -34,7 +34,10 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
   const [isUploading, setIsUploading] = useState(false);
 
   const selectedCount = photos.filter(p => p.selected).length;
-  const lastSyncDate = profile?.last_sync_at ? new Date(profile.last_sync_at) : null;
+  // Supabase timestamp 컬럼은 'Z' 없이 반환하므로 UTC로 파싱하기 위해 'Z' 추가
+  const lastSyncDate = profile?.last_sync_at
+    ? new Date(profile.last_sync_at.endsWith('Z') ? profile.last_sync_at : profile.last_sync_at + 'Z')
+    : null;
 
   // Request permission on mount
   useEffect(() => {
