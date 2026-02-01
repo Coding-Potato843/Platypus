@@ -75,9 +75,8 @@ app/
 ### 2. Permission Request (PermissionModal.tsx)
 - Shows on first app launch if gallery permission not granted
 - Clean UI explaining why permission is needed
-- Features list: photo import, auto scan, location reading
-- "권한 허용" button to request permission
-- If denied: shows "설정으로 이동" button to open settings
+- Step-by-step guide: "1. 권한 → 2. 사진 및 동영상 → 3. 허용"
+- "설정으로 이동" button to open app settings directly
 - Auto re-checks permission when returning from settings (AppState listener)
 - Privacy note reassuring user about data safety
 
@@ -246,8 +245,8 @@ Priority order: EXIF DateTimeOriginal > modificationTime > creationTime > curren
 | Select from Gallery | 갤러리에서 선택 | Manual picker button |
 | Scan Complete | 스캔 완료 | Alert title |
 | Photo Management App | 사진 관리 앱 | LoginScreen subtitle |
-| Permission Required | 권한 필요 | Permission alert title |
-| Gallery access required | 사진을 불러오려면 갤러리 접근 권한이 필요합니다 | Permission message |
+| Permission Required | 갤러리 접근 권한 필요 | Permission modal title |
+| Go to Settings | 설정으로 이동 | Permission modal button |
 
 **Note**: The word "동기화" (sync) is NOT used in the UI. Use "불러오기" (import/load) or "스캔" (scan) instead.
 
@@ -497,4 +496,4 @@ npx serve dist
 - [x] **All Albums Scan** - Downloads, Telegram, WhatsApp, KakaoTalk support
 - [x] **Downloaded Image Date Fix** - Uses modificationTime for proper dating
 - [x] **UI Cleanup** - Removed camera icon, filter icon; streamlined date picker buttons
-- [x] **Permission Modal** - First-launch permission request with clean UI and settings redirect
+- [x] **Permission Modal** - First-launch permission request with step-by-step guide and settings redirect

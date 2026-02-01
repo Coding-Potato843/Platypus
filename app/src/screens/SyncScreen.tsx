@@ -16,6 +16,7 @@ import { PhotoGrid } from '../components/PhotoGrid';
 import { LoadingOverlay } from '../components/LoadingOverlay';
 import { GalleryPickerModal } from '../components/GalleryPickerModal';
 import { PermissionModal } from '../components/PermissionModal';
+import * as MediaLibrary from 'expo-media-library';
 import {
   requestMediaLibraryPermission,
   fetchPhotosAfterDate,
@@ -32,7 +33,6 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
   const [photos, setPhotos] = useState<PhotoAsset[]>([]);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [permissionDenied, setPermissionDenied] = useState(false);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
@@ -51,31 +51,15 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
   // Check permission on mount and show modal if needed
   useEffect(() => {
     (async () => {
-      const granted = await requestMediaLibraryPermission();
-      setHasPermission(granted);
-      if (!granted) {
-        // Show permission modal on first launch
+      const { status } = await MediaLibrary.getPermissionsAsync();
+      if (status === 'granted') {
+        setHasPermission(true);
+      } else {
+        // Permission not granted - show modal to direct to settings
+        setHasPermission(false);
         setShowPermissionModal(true);
       }
     })();
-  }, []);
-
-  // Handle permission request from modal
-  const handleRequestPermission = useCallback(async () => {
-    const granted = await requestMediaLibraryPermission();
-    setHasPermission(granted);
-    if (granted) {
-      setShowPermissionModal(false);
-      setPermissionDenied(false);
-    } else {
-      // Permission was denied
-      setPermissionDenied(true);
-    }
-  }, []);
-
-  // Handle settings opened (user needs to manually grant permission)
-  const handleOpenSettings = useCallback(() => {
-    // Keep modal visible so user can retry after returning from settings
   }, []);
 
   // Re-check permission when app comes back from settings
@@ -83,11 +67,10 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
     const handleAppStateChange = async (nextAppState: AppStateStatus) => {
       if (nextAppState === 'active' && showPermissionModal) {
         // User returned to app, re-check permission
-        const granted = await requestMediaLibraryPermission();
-        setHasPermission(granted);
-        if (granted) {
+        const { status } = await MediaLibrary.getPermissionsAsync();
+        if (status === 'granted') {
+          setHasPermission(true);
           setShowPermissionModal(false);
-          setPermissionDenied(false);
         }
       }
     };
@@ -373,9 +356,7 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
       {/* Permission Request Modal */}
       <PermissionModal
         visible={showPermissionModal}
-        onRequestPermission={handleRequestPermission}
-        onOpenSettings={handleOpenSettings}
-        permissionDenied={permissionDenied}
+        onClose={() => setShowPermissionModal(false)}
       />
     </SafeAreaView>
   );

@@ -443,6 +443,8 @@ The app uses Korean UI text. Key terminology:
 | Select from Gallery | 갤러리에서 선택 | Manual photo picker |
 | Scan Complete | 스캔 완료 | Alert title after scanning |
 | Photo Management App | 사진 관리 앱 | App subtitle on login screen |
+| Permission Required | 갤러리 접근 권한 필요 | Permission modal title |
+| Go to Settings | 설정으로 이동 | Permission modal button |
 
 **Note**: The word "동기화" (sync) is NOT used in the UI. Use "불러오기" (import/load) or "스캔" (scan) instead.
 
@@ -509,7 +511,7 @@ APK is downloaded from Expo dashboard after build completes.
 ### Current Status
 - ✅ Login/Logout working
 - ✅ Auth state persistence (AsyncStorage)
-- ✅ **Permission Request Modal** - First-launch permission request with clean UI
+- ✅ **Permission Request Modal** - First-launch permission request with step-by-step guide
 - ✅ Gallery auto-scan (development build)
 - ✅ Photo upload to Supabase
 - ✅ EXIF extraction (date, GPS)

@@ -11,24 +11,16 @@ import {
 
 interface PermissionModalProps {
   visible: boolean;
-  onRequestPermission: () => void;
-  onOpenSettings: () => void;
-  permissionDenied: boolean;
+  onClose: () => void;
 }
 
-export function PermissionModal({
-  visible,
-  onRequestPermission,
-  onOpenSettings,
-  permissionDenied,
-}: PermissionModalProps) {
+export function PermissionModal({ visible, onClose }: PermissionModalProps) {
   const handleOpenSettings = () => {
     if (Platform.OS === 'ios') {
       Linking.openURL('app-settings:');
     } else {
       Linking.openSettings();
     }
-    onOpenSettings();
   };
 
   return (
@@ -46,52 +38,34 @@ export function PermissionModal({
           </View>
 
           {/* Title */}
-          <Text style={styles.title}>
-            {permissionDenied ? '갤러리 접근 권한 필요' : '갤러리 접근 권한'}
-          </Text>
+          <Text style={styles.title}>갤러리 접근 권한 필요</Text>
 
           {/* Description */}
           <Text style={styles.description}>
-            {permissionDenied
-              ? '갤러리 접근 권한이 거부되었습니다.\n설정에서 권한을 허용해주세요.'
-              : '사진을 불러오고 업로드하려면\n갤러리 접근 권한이 필요합니다.'}
+            사진을 불러오고 업로드하려면{'\n'}
+            갤러리 접근 권한이 필요합니다.
           </Text>
 
-          {/* Features list */}
-          {!permissionDenied && (
-            <View style={styles.featureList}>
-              <View style={styles.featureItem}>
-                <Text style={styles.featureIcon}>✓</Text>
-                <Text style={styles.featureText}>갤러리에서 사진 불러오기</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <Text style={styles.featureIcon}>✓</Text>
-                <Text style={styles.featureText}>새로운 사진 자동 스캔</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <Text style={styles.featureIcon}>✓</Text>
-                <Text style={styles.featureText}>사진 위치 정보 읽기</Text>
-              </View>
+          {/* Step-by-step guide */}
+          <View style={styles.guideBox}>
+            <Text style={styles.guideTitle}>설정에서 이렇게 허용해주세요:</Text>
+            <View style={styles.guideSteps}>
+              <Text style={styles.guideStep}>1. 권한</Text>
+              <Text style={styles.guideArrow}>→</Text>
+              <Text style={styles.guideStep}>2. 사진 및 동영상</Text>
+              <Text style={styles.guideArrow}>→</Text>
+              <Text style={styles.guideStep}>3. 허용</Text>
             </View>
-          )}
+          </View>
 
-          {/* Buttons */}
+          {/* Button */}
           <View style={styles.buttonContainer}>
-            {permissionDenied ? (
-              <TouchableOpacity
-                style={styles.primaryButton}
-                onPress={handleOpenSettings}
-              >
-                <Text style={styles.primaryButtonText}>설정으로 이동</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={styles.primaryButton}
-                onPress={onRequestPermission}
-              >
-                <Text style={styles.primaryButtonText}>권한 허용</Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={handleOpenSettings}
+            >
+              <Text style={styles.primaryButtonText}>설정으로 이동</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Privacy note */}
@@ -145,27 +119,36 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     textAlign: 'center',
     lineHeight: 22,
-    marginBottom: 24,
+    marginBottom: 20,
   },
-  featureList: {
+  guideBox: {
     width: '100%',
+    backgroundColor: '#0f172a',
+    borderRadius: 12,
+    padding: 16,
     marginBottom: 24,
   },
-  featureItem: {
+  guideTitle: {
+    fontSize: 13,
+    color: '#94a3b8',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  guideSteps: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    justifyContent: 'center',
+    flexWrap: 'wrap',
   },
-  featureIcon: {
-    fontSize: 16,
-    color: '#06b6d4',
-    marginRight: 12,
-    fontWeight: 'bold',
-  },
-  featureText: {
+  guideStep: {
     fontSize: 14,
-    color: '#e2e8f0',
+    color: '#06b6d4',
+    fontWeight: '600',
+  },
+  guideArrow: {
+    fontSize: 14,
+    color: '#64748b',
+    marginHorizontal: 8,
   },
   buttonContainer: {
     width: '100%',
