@@ -698,8 +698,8 @@ async function updateUIForAuthenticatedUser(showLoadingOverlay = true) {
         elements.userEmail.textContent = user.email;
         elements.joinDate.textContent = `가입일: ${formatDate(profile.created_at || user.created_at)}`;
         elements.lastSync.textContent = profile.last_sync_at
-            ? `마지막 동기화: ${formatDateTime(profile.last_sync_at)}`
-            : '마지막 동기화: 없음';
+            ? `마지막 스캔: ${formatDateTime(profile.last_sync_at)}`
+            : '마지막 스캔: 없음';
         // Store last sync date in state
         state.lastSyncDate = profile.last_sync_at || null;
     } else {
@@ -708,7 +708,7 @@ async function updateUIForAuthenticatedUser(showLoadingOverlay = true) {
         elements.userId.textContent = user.user_metadata?.username ? `@${user.user_metadata.username}` : '';
         elements.userEmail.textContent = user.email;
         elements.joinDate.textContent = `가입일: ${formatDate(user.created_at)}`;
-        elements.lastSync.textContent = '마지막 동기화: 없음';
+        elements.lastSync.textContent = '마지막 스캔: 없음';
         state.lastSyncDate = null;
     }
 
@@ -739,7 +739,7 @@ function updateUIForUnauthenticatedUser() {
     elements.userId.textContent = '';
     elements.userEmail.textContent = '-';
     elements.joinDate.textContent = '가입일: -';
-    elements.lastSync.textContent = '마지막 동기화: -';
+    elements.lastSync.textContent = '마지막 스캔: -';
     elements.photoCount.textContent = '0';
     elements.friendCount.textContent = '0';
     elements.storageUsed.textContent = '0 MB';
@@ -904,7 +904,7 @@ function renderGallery(galleryElement, photos, showLoadMore = false, hasMore = f
             <div class="gallery-empty">
                 <i class="ph ph-camera-slash"></i>
                 <h3>사진이 없습니다</h3>
-                <p>동기화 버튼을 눌러 사진을 추가하거나 필터를 조정해보세요.</p>
+                <p>불러오기 버튼을 눌러 사진을 추가하거나 필터를 조정해보세요.</p>
             </div>
         `;
         return;
@@ -1228,7 +1228,7 @@ async function handleFileSelect(event) {
 
         if (syncFiles.length === 0) {
             if (filteredCount > 0) {
-                showToast(`${filteredCount}개의 사진이 이미 동기화되었습니다`, 'info');
+                showToast(`${filteredCount}개의 사진이 이미 추가되었습니다`, 'info');
             } else {
                 showToast('선택한 사진이 없습니다', 'warning');
             }
@@ -1444,7 +1444,7 @@ async function importSelectedPhotos() {
         state.lastSyncDate = new Date().toISOString();
 
         // Update UI
-        elements.lastSync.textContent = `마지막 동기화: ${formatDateTime(state.lastSyncDate)}`;
+        elements.lastSync.textContent = `마지막 스캔: ${formatDateTime(state.lastSyncDate)}`;
     } catch (error) {
         console.error('Failed to update last sync:', error);
     }
@@ -1819,7 +1819,7 @@ function renderAccountInfo() {
     elements.userId.textContent = `@${mockUser.username}`;
     elements.userEmail.textContent = mockUser.email;
     elements.joinDate.textContent = `가입일: ${formatDate(mockUser.joinDate)}`;
-    elements.lastSync.textContent = `마지막 동기화: ${formatDateTime(mockUser.lastSync)}`;
+    elements.lastSync.textContent = `마지막 스캔: ${formatDateTime(mockUser.lastSync)}`;
     elements.photoCount.textContent = mockUser.photoCount;
     elements.friendCount.textContent = mockUser.friendCount;
     elements.storageUsed.textContent = mockUser.storageUsed;

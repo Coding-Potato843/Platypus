@@ -52,7 +52,7 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
       if (!granted) {
         Alert.alert(
           '권한 필요',
-          '사진을 동기화하려면 갤러리 접근 권한이 필요합니다.',
+          '사진을 불러오려면 갤러리 접근 권한이 필요합니다.',
           [{ text: '확인' }]
         );
       }
@@ -79,7 +79,7 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
 
       if (scannedPhotos.length === 0) {
         Alert.alert(
-          '동기화 완료',
+          '스캔 완료',
           lastSyncDate
             ? '새로운 사진이 없습니다.'
             : '갤러리에 사진이 없습니다.'

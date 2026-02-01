@@ -2,7 +2,7 @@
 
 ## Overview
 React Native (Expo) companion app for the Platypus photo sharing web service.
-Enables automatic photo sync from device gallery to Supabase.
+Enables photo import from device gallery to Supabase.
 
 ---
 
@@ -71,22 +71,22 @@ app/
 - Korean UI text
 - Auto-navigation to SyncScreen on successful login
 
-### 2. Gallery Sync (SyncScreen.tsx)
+### 2. Gallery Import (SyncScreen.tsx)
 
-**Two Sync Methods:**
+**Two Import Methods:**
 
 #### Method 1: "갤러리 스캔" (Auto Scan)
 1. User taps "갤러리 스캔" button
 2. App requests gallery permission (expo-media-library)
 3. Scans all photos from device
-4. Filters: only photos with `creationTime > last_sync_at`
+4. Filters: only photos with `modificationTime > last_sync_at` (last scan date)
 5. Displays in grid with ALL photos PRE-SELECTED
 6. User taps to DESELECT unwanted photos
 7. User taps "업로드" button
 8. Photos uploaded to Supabase Storage + Database
-9. `last_sync_at` updated in user profile
+9. `last_sync_at` (last scan date) updated in user profile
 
-#### Method 2: "갤러리에서 선택" (Manual Picker - NEW)
+#### Method 2: "갤러리에서 선택" (Manual Picker)
 1. User taps "갤러리에서 선택" button
 2. Opens GalleryPickerModal with ALL gallery photos (no date filter)
 3. User can apply filters:
@@ -103,7 +103,7 @@ app/
 - Progress indicator during upload
 - "추가 선택" button to add more photos after initial selection
 
-### 3. Gallery Picker Modal (GalleryPickerModal.tsx) - NEW
+### 3. Gallery Picker Modal (GalleryPickerModal.tsx)
 
 **Features:**
 - Full-screen modal with infinite scroll (50 photos per batch)
@@ -182,7 +182,7 @@ Priority order: EXIF DateTimeOriginal > modificationTime > creationTime > curren
 | id | uuid | PK (same as auth.users.id) |
 | email | text | User email |
 | username | text | Display name |
-| last_sync_at | timestamp | Last sync time (CRITICAL for incremental sync) |
+| last_sync_at | timestamp | Last scan date (CRITICAL for incremental import) |
 
 ### photos table
 | Column | Type | Description |
@@ -209,7 +209,7 @@ Priority order: EXIF DateTimeOriginal > modificationTime > creationTime > curren
 ### expo-media-library Plugin Config
 ```json
 {
-  "photosPermission": "사진을 동기화하려면 갤러리 접근 권한이 필요합니다.",
+  "photosPermission": "사진을 불러오려면 갤러리 접근 권한이 필요합니다.",
   "savePhotosPermission": "사진을 저장하려면 갤러리 접근 권한이 필요합니다.",
   "isAccessMediaLocationEnabled": true
 }
@@ -224,6 +224,22 @@ Priority order: EXIF DateTimeOriginal > modificationTime > creationTime > curren
 - Text: `#f1f5f9` (slate-100)
 - Border: `#334155` (slate-700)
 - Error: `#ef4444` (red-500)
+
+---
+
+## UI Terminology (Korean)
+
+| English | Korean (UI) | Notes |
+|---------|-------------|-------|
+| Last Scan Date | 마지막 스캔 날짜 | Displayed on SyncScreen |
+| Gallery Scan | 갤러리 스캔 | Auto-scan button |
+| Select from Gallery | 갤러리에서 선택 | Manual picker button |
+| Scan Complete | 스캔 완료 | Alert title |
+| Photo Management App | 사진 관리 앱 | LoginScreen subtitle |
+| Permission Required | 권한 필요 | Permission alert title |
+| Gallery access required | 사진을 불러오려면 갤러리 접근 권한이 필요합니다 | Permission message |
+
+**Note**: The word "동기화" (sync) is NOT used in the UI. Use "불러오기" (import/load) or "스캔" (scan) instead.
 
 ---
 
@@ -320,7 +336,7 @@ After build completes, download the APK from Expo dashboard and install on devic
 4. **Selection**: Verify photos are pre-selected, tap to deselect
 5. **Upload**: Tap "업로드" and watch progress
 6. **Verify on Web**: Login to web frontend, check uploaded photos appear
-7. **Incremental Sync**: Upload again, verify only NEW photos shown
+7. **Incremental Import**: Upload again, verify only NEW photos shown
 8. **Downloaded Images**: Verify images from Downloads folder appear in scan
 9. **Messenger Images**: Verify images from Telegram/WhatsApp/KakaoTalk appear
 
@@ -332,7 +348,7 @@ After build completes, download the APK from Expo dashboard and install on devic
 5. **Selection**: Tap photos to select (not pre-selected)
 6. **Confirm**: Tap "선택 완료" to add to main list
 7. **Upload**: Verify selected photos upload correctly
-8. **Old Photos**: Confirm photos before `last_sync_at` can be selected
+8. **Old Photos**: Confirm photos before last scan date can be selected
 9. **Downloaded Images**: Verify downloaded images appear in picker
 
 ### Downloaded Image Date Handling
@@ -347,7 +363,7 @@ After build completes, download the APK from Expo dashboard and install on devic
 
 1. **Same Supabase Database**: Photos uploaded from this app appear on web gallery
 2. **RLS Enabled**: Users can only access their own data
-3. **last_sync_at**: Critical for incremental sync - only syncs photos newer than this timestamp
+3. **last_sync_at**: Critical for incremental import - only imports photos newer than this timestamp (last scan date)
 4. **Storage Path**: `{userId}/{timestamp}_{random}.{ext}` (same pattern as web)
 5. **No Registration**: Users must register on web first, then login via app
 
@@ -436,7 +452,7 @@ npx serve dist
 - ✅ ACCESS_MEDIA_LOCATION permission for GPS data
 - ✅ Photo upload to Supabase Storage
 - ✅ Reverse geocoding (GPS → location name)
-- ✅ Incremental sync (only photos after last_sync_at)
+- ✅ Incremental import (only photos after last scan date)
 - ✅ **Gallery Picker Modal** - Select any photos regardless of sync date
 - ✅ **Date Range Filter** - Year/month selection with native-level filtering
 - ✅ **Location Search** - Text-based location filtering
@@ -446,7 +462,7 @@ npx serve dist
 
 ### Notes
 - **Development build required**: Expo Go has limitations with media library access
-- **Manual sync only**: Background sync is NOT planned
+- **Manual import only**: Background upload is NOT planned
 - **expo-file-system/legacy**: Uses legacy API for `readAsStringAsync`
 - **Gallery Picker works in Expo Go**: DateRangePicker is pure JS, no native modules
 - **modificationTime**: Used for filtering instead of creationTime to catch downloaded images
@@ -463,7 +479,7 @@ npx serve dist
 
 ## Completed Enhancements
 
-- [x] **Gallery Picker** - Select photos before last_sync_at
+- [x] **Gallery Picker** - Select photos before last scan date
 - [x] **Date Range Filter** - Native-level date filtering
 - [x] **Location Search** - Client-side text filtering
 - [x] **Custom Date Picker** - Year/month scroll selection without native modules

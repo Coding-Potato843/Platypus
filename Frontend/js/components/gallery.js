@@ -118,7 +118,7 @@ export class Gallery {
             <div class="gallery-empty">
                 <i class="ph ph-camera-slash"></i>
                 <h3>사진이 없습니다</h3>
-                <p>동기화 버튼을 눌러 사진을 추가하거나 필터를 조정해보세요.</p>
+                <p>불러오기 버튼을 눌러 사진을 추가하거나 필터를 조정해보세요.</p>
             </div>
         `;
     }

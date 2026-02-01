@@ -3,7 +3,7 @@
 # Platypus - Photo Sharing & Organization App
 
 ## Overview
-Photo sharing web app with device sync, group organization, friend sharing, and slideshow features.
+Photo sharing web app with photo import, group organization, friend sharing, and slideshow features.
 
 ## Tech Stack
 - **Frontend**: Vanilla JS (ES6), Custom CSS, Phosphor Icons, Inter font, Korean UI
@@ -17,11 +17,11 @@ Photo sharing web app with device sync, group organization, friend sharing, and 
 ### 1. Authentication
 - Email/password registration & login with session persistence
 - Validation: Email format (duplicate check), Password (8+ chars, lower/number/special char), Username (3-20 chars, Korean/alphanumeric/_)
-- Profile: name, username, email, avatar, join date, last sync, stats
+- Profile: name, username, email, avatar, join date, last scan date, stats
 - **Account Deletion**: Deletes all user data (photos, groups, friendships) with confirmation modal
 
 ### 2. Photo Management
-- **Sync**: Incremental sync (only new photos since last sync)
+- **Import**: Incremental import (only new photos since last scan)
 - **Gallery**: Responsive grid (2-5 cols), lazy loading, hover effects, pagination (20/page)
 - **Detail Modal**: Metadata, group assignment, download, delete
 - **Data Model**: `{ id, url, date, location, groupIds[], author? }`
@@ -46,7 +46,7 @@ Photo sharing web app with device sync, group organization, friend sharing, and 
 ### 7. UI/UX
 - 3 tabs: My Photos, Friends, Account
 - Dark theme only (cyan primary #06b6d4, slate backgrounds)
-- Components: Toast, Loading overlay, Confirm modal, Photo/Sync/Group/Profile/Add Friend modals
+- Components: Toast, Loading overlay, Confirm modal, Photo/Import/Group/Profile/Add Friend modals
 - Random background image on login/signup page (configurable via `Frontend/background_image/images.json`)
 
 ---
@@ -68,7 +68,7 @@ Photo sharing web app with device sync, group organization, friend sharing, and 
 | user_id | text | NOT NULL, UNIQUE handle (@username) |
 | avatar_url | text | Profile image URL |
 | created_at | timestamp | Join date |
-| last_sync_at | timestamp | Last photo sync |
+| last_sync_at | timestamp | Last scan date |
 
 ### photos
 | Column | Type | Description |
@@ -218,8 +218,8 @@ loadFriendPhotos(loadMore = false)           // Load friends' photos with pagina
 updateUIForAuthenticatedUser(showLoadingOverlay = true)  // Setup UI after login
 updateUIForUnauthenticatedUser()                          // Reset UI after logout
 
-// Photo Sync
-openSyncModal()              // Open sync modal
+// Photo Import
+openSyncModal()              // Open photo import modal
 handleFileSelect(event)      // Handle file selection, extract EXIF, filter by date
 renderSyncPreview()          // Render photo preview gallery
 processReverseGeocoding()    // Convert GPS coordinates to location names (background)
@@ -274,17 +274,17 @@ if (elements.appContainer.style.display === 'block') {
 }
 ```
 
-### Photo Sync Flow
+### Photo Import Flow
 Mobile-first photo upload workflow:
 
 ```
-1. User clicks [Sync] button
+1. User clicks [사진 불러오기 (Import Photos)] button
        ↓
 2. User selects photos from device gallery (input[type=file])
        ↓
 3. App extracts EXIF data (date, GPS coordinates)
        ↓
-4. Filter: only photos newer than last sync date
+4. Filter: only photos newer than last scan date
        ↓
 5. Preview with all photos selected (user deselects unwanted)
        ↓
@@ -358,10 +358,10 @@ confirmDeleteAccount() → handleDeleteAccount() → deleteAccount() (auth.js)
 - Profile edit, friend search/add, photo download, pagination
 - Group filtering fix (dynamic DOM query for group chips)
 - Account deletion - complete data removal including auth.users via RPC
-- Photo sync with EXIF extraction (date, GPS)
+- Photo import with EXIF extraction (date, GPS)
 - Reverse geocoding (GPS → location name via OpenStreetMap)
 - Upload progress indicator
-- Last sync time tracking and filtering
+- Last scan date tracking and filtering
 
 ### Required Setup
 Run these in **Supabase SQL Editor** before using the app:
@@ -430,16 +430,34 @@ Login/signup page displays a random background image from `Frontend/background_i
 
 ---
 
+## UI Terminology (Korean)
+
+The app uses Korean UI text. Key terminology:
+
+| English | Korean (UI) | Notes |
+|---------|-------------|-------|
+| Import Photos | 사진 불러오기 | Main button to import photos |
+| Select Photo Files | 사진 파일 선택 | File picker button |
+| Last Scan | 마지막 스캔 | Timestamp of last gallery scan |
+| Gallery Scan | 갤러리 스캔 | Auto-scan photos after last scan date |
+| Select from Gallery | 갤러리에서 선택 | Manual photo picker |
+| Scan Complete | 스캔 완료 | Alert title after scanning |
+| Photo Management App | 사진 관리 앱 | App subtitle on login screen |
+
+**Note**: The word "동기화" (sync) is NOT used in the UI. Use "불러오기" (import/load) or "스캔" (scan) instead.
+
+---
+
 ## Mobile App (Expo)
 
 ### Overview
-React Native (Expo SDK 54) companion app for native gallery sync.
+React Native (Expo SDK 54) companion app for native gallery photo import.
 See `app/app_description.txt` for detailed documentation.
 
 ### Key Features
 - Login with existing Platypus account (Supabase Auth)
 - Native gallery access (expo-media-library)
-- Incremental sync (only photos after `last_sync_at`)
+- Incremental import (only photos after last scan date via `last_sync_at`)
 - Pre-selected photos (user deselects unwanted)
 - Reverse geocoding (GPS → location name)
 
@@ -500,14 +518,14 @@ APK is downloaded from Expo dashboard after build completes.
 - ✅ **Location Search** - Location name text search
 - ✅ **All Albums Scan** - Includes Downloads, Telegram, WhatsApp, KakaoTalk folders
 - ✅ **Downloaded Image Support** - Uses modificationTime for proper date handling
-- ❌ Background sync not planned (manual sync only)
+- ❌ Background upload not planned (manual import only)
 
 ### Gallery Picker Feature
-Feature to manually select photos from the gallery, allowing upload of images from before `last_sync_at`.
+Feature to manually select photos from the gallery, allowing upload of images from before last scan date.
 
-**Two Sync Methods:**
-1. **Gallery Scan** - Auto-scans photos after `last_sync_at` (uses `modificationTime`)
-2. **Select from Gallery** - Manual selection from entire gallery with date/location filtering
+**Two Import Methods:**
+1. **Gallery Scan (갤러리 스캔)** - Auto-scans photos after last scan date (uses `modificationTime`)
+2. **Select from Gallery (갤러리에서 선택)** - Manual selection from entire gallery with date/location filtering
 
 **Components:**
 - `GalleryPickerModal.tsx` - Full gallery modal (infinite scroll, filtering)

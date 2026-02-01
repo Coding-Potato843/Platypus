@@ -85,7 +85,7 @@ export async function updateLastSync(userId: string): Promise<void> {
 
   if (error) {
     console.error('Update last sync error:', error);
-    throw new Error('동기화 시간 업데이트에 실패했습니다.');
+    throw new Error('스캔 시간 업데이트에 실패했습니다.');
   }
 }
 

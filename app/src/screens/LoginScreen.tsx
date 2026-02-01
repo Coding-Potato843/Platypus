@@ -59,7 +59,7 @@ export function LoginScreen({ navigation }: LoginScreenProps) {
         <View style={styles.header}>
           <Text style={styles.logo}>🦆</Text>
           <Text style={styles.title}>Platypus</Text>
-          <Text style={styles.subtitle}>사진 동기화 앱</Text>
+          <Text style={styles.subtitle}>사진 관리 앱</Text>
         </View>
 
         {/* Form */}
