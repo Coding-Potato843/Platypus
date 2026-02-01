@@ -245,7 +245,7 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
       {photos.length === 0 && (
         <View style={styles.emptyState}>
           <Text style={styles.emptyText}>
-            갤러리를 스캔하여{'\n'}새로운 사진을 찾습니다
+            마지막으로 업로드한 날짜를 기준으로{'\n'}새롭게 생긴 사진을 불러오거나{'\n'}갤러리에서 직접 선택합니다.
           </Text>
           <View style={styles.emptyButtons}>
             <TouchableOpacity style={styles.scanButton} onPress={handleScanGallery}>
