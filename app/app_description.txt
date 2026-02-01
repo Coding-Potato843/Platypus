@@ -49,9 +49,10 @@ app/
 │   ├── components/
 │   │   ├── LoadingOverlay.tsx  # Full-screen loading modal
 │   │   ├── PhotoGrid.tsx       # Photo grid with selection checkmarks
-│   │   ├── GalleryPickerModal.tsx  # Gallery picker with filtering (NEW)
-│   │   ├── DateRangePicker.tsx     # Year/month date picker (NEW)
-│   │   └── FilterBar.tsx           # Collapsible filter UI (NEW)
+│   │   ├── GalleryPickerModal.tsx  # Gallery picker with filtering
+│   │   ├── DateRangePicker.tsx     # Year/month date picker
+│   │   ├── FilterBar.tsx           # Collapsible filter UI
+│   │   └── PermissionModal.tsx     # Gallery permission request modal
 │   └── screens/
 │       ├── LoginScreen.tsx     # Email/password login form
 │       └── SyncScreen.tsx      # Main sync UI (scan, gallery picker, upload)
@@ -71,7 +72,16 @@ app/
 - Korean UI text
 - Auto-navigation to SyncScreen on successful login
 
-### 2. Gallery Import (SyncScreen.tsx)
+### 2. Permission Request (PermissionModal.tsx)
+- Shows on first app launch if gallery permission not granted
+- Clean UI explaining why permission is needed
+- Features list: photo import, auto scan, location reading
+- "권한 허용" button to request permission
+- If denied: shows "설정으로 이동" button to open settings
+- Auto re-checks permission when returning from settings (AppState listener)
+- Privacy note reassuring user about data safety
+
+### 3. Gallery Import (SyncScreen.tsx)
 
 **Two Import Methods:**
 
@@ -103,7 +113,7 @@ app/
 - Progress indicator during upload
 - "추가 선택" button to add more photos after initial selection
 
-### 3. Gallery Picker Modal (GalleryPickerModal.tsx)
+### 4. Gallery Picker Modal (GalleryPickerModal.tsx)
 
 **Features:**
 - Full-screen modal with infinite scroll (50 photos per batch)
@@ -124,7 +134,7 @@ app/
 - Future date prevention (max = current date)
 - No native module dependency (works in Expo Go)
 
-### 4. Photo Services (services/photos.ts)
+### 5. Photo Services (services/photos.ts)
 
 **Key Functions:**
 
@@ -165,7 +175,7 @@ Priority order: EXIF DateTimeOriginal > modificationTime > creationTime > curren
    - Sequential upload with progress tracking
    - Returns `{ success, failed }` counts
 
-### 5. Reverse Geocoding (services/geocoding.ts)
+### 6. Reverse Geocoding (services/geocoding.ts)
 - Uses OpenStreetMap Nominatim API (free, no API key)
 - Rate limited: 1 request per second
 - Converts GPS coordinates → location name
@@ -447,6 +457,7 @@ npx serve dist
 - ✅ Auth state persistence (AsyncStorage)
 - ✅ Navigation between screens
 - ✅ Dark theme UI matching web
+- ✅ **Permission Request Modal** - Shows on first launch, handles denied state
 - ✅ Gallery auto-scan (expo-media-library)
 - ✅ EXIF extraction (date, GPS coordinates)
 - ✅ ACCESS_MEDIA_LOCATION permission for GPS data
@@ -486,3 +497,4 @@ npx serve dist
 - [x] **All Albums Scan** - Downloads, Telegram, WhatsApp, KakaoTalk support
 - [x] **Downloaded Image Date Fix** - Uses modificationTime for proper dating
 - [x] **UI Cleanup** - Removed camera icon, filter icon; streamlined date picker buttons
+- [x] **Permission Modal** - First-launch permission request with clean UI and settings redirect

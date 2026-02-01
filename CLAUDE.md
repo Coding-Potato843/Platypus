@@ -509,6 +509,7 @@ APK is downloaded from Expo dashboard after build completes.
 ### Current Status
 - ✅ Login/Logout working
 - ✅ Auth state persistence (AsyncStorage)
+- ✅ **Permission Request Modal** - First-launch permission request with clean UI
 - ✅ Gallery auto-scan (development build)
 - ✅ Photo upload to Supabase
 - ✅ EXIF extraction (date, GPS)

@@ -5,6 +5,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -13,6 +15,7 @@ import { useAuth } from '../hooks/useAuth';
 import { PhotoGrid } from '../components/PhotoGrid';
 import { LoadingOverlay } from '../components/LoadingOverlay';
 import { GalleryPickerModal } from '../components/GalleryPickerModal';
+import { PermissionModal } from '../components/PermissionModal';
 import {
   requestMediaLibraryPermission,
   fetchPhotosAfterDate,
@@ -27,9 +30,10 @@ type SyncScreenProps = {
 export function SyncScreen({ navigation }: SyncScreenProps) {
   const { user, profile, logout, refreshProfile } = useAuth();
   const [photos, setPhotos] = useState<PhotoAsset[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
-  const [hasPermission, setHasPermission] = useState(false);
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
   const [isUploading, setIsUploading] = useState(false);
@@ -44,20 +48,53 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
   // 이미 추가된 사진 ID Set (갤러리 피커에서 중복 방지용)
   const existingPhotoIds = useMemo(() => new Set(photos.map(p => p.id)), [photos]);
 
-  // Request permission on mount
+  // Check permission on mount and show modal if needed
   useEffect(() => {
     (async () => {
       const granted = await requestMediaLibraryPermission();
       setHasPermission(granted);
       if (!granted) {
-        Alert.alert(
-          '권한 필요',
-          '사진을 불러오려면 갤러리 접근 권한이 필요합니다.',
-          [{ text: '확인' }]
-        );
+        // Show permission modal on first launch
+        setShowPermissionModal(true);
       }
     })();
   }, []);
+
+  // Handle permission request from modal
+  const handleRequestPermission = useCallback(async () => {
+    const granted = await requestMediaLibraryPermission();
+    setHasPermission(granted);
+    if (granted) {
+      setShowPermissionModal(false);
+      setPermissionDenied(false);
+    } else {
+      // Permission was denied
+      setPermissionDenied(true);
+    }
+  }, []);
+
+  // Handle settings opened (user needs to manually grant permission)
+  const handleOpenSettings = useCallback(() => {
+    // Keep modal visible so user can retry after returning from settings
+  }, []);
+
+  // Re-check permission when app comes back from settings
+  useEffect(() => {
+    const handleAppStateChange = async (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active' && showPermissionModal) {
+        // User returned to app, re-check permission
+        const granted = await requestMediaLibraryPermission();
+        setHasPermission(granted);
+        if (granted) {
+          setShowPermissionModal(false);
+          setPermissionDenied(false);
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription.remove();
+  }, [showPermissionModal]);
 
   // Scan gallery for new photos
   const handleScanGallery = useCallback(async () => {
@@ -331,6 +368,14 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
         onClose={() => setIsGalleryPickerVisible(false)}
         onPhotosSelected={handleGalleryPickerComplete}
         existingPhotoIds={existingPhotoIds}
+      />
+
+      {/* Permission Request Modal */}
+      <PermissionModal
+        visible={showPermissionModal}
+        onRequestPermission={handleRequestPermission}
+        onOpenSettings={handleOpenSettings}
+        permissionDenied={permissionDenied}
       />
     </SafeAreaView>
   );
