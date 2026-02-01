@@ -454,10 +454,18 @@ npx expo export --platform web   # Build for web
 - **node:sea error**: Expo SDK 50 had Windows path issues. Resolved by upgrading to SDK 54.
 - **Port conflicts**: Kill all `node.exe` processes before restarting Expo.
 - **Dependency conflicts**: Use `--legacy-peer-deps` flag when installing.
+- **React Native version mismatch**: Expo Go requires matching React Native version. SDK 54 uses RN 0.81.5.
 
 ### Tech Stack
-- Expo SDK 54
-- React 19 + React Native 0.77
+- Expo SDK 54.0.33
+- React 19.1.0 + React Native 0.81.5
 - TypeScript
 - React Navigation v7
+- SafeAreaProvider for proper layout
 - Same Supabase backend as web
+
+### Current Status
+- ✅ Login/Logout working
+- ✅ Auth state persistence (AsyncStorage)
+- ⚠️ Gallery scan button not working (Expo Go limitation - needs development build for full media access)
+- ❌ Background sync not planned (manual sync only)

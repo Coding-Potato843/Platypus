@@ -7,13 +7,14 @@ Enables automatic photo sync from device gallery to Supabase.
 ---
 
 ## Tech Stack
-- **Framework**: React Native + Expo SDK 54
+- **Framework**: React Native + Expo SDK 54.0.33
 - **Language**: TypeScript
 - **React**: 19.1.0
-- **React Native**: 0.77.0
+- **React Native**: 0.81.5 (must match Expo Go version)
 - **Backend**: Supabase (same as web frontend)
 - **Navigation**: React Navigation v7
 - **State**: React hooks (useAuth custom hook)
+- **Layout**: SafeAreaProvider (react-native-safe-area-context)
 
 ---
 
@@ -183,20 +184,24 @@ interface UserProfile {
 ## Development Commands
 
 ```bash
-# Install dependencies
+# Install dependencies (MUST use --legacy-peer-deps due to React 19 conflicts)
 cd app
-npm install
+npm install --legacy-peer-deps
 
-# Start Expo dev server
+# Start Expo dev server (tunnel mode for mobile access)
 npm start
 # or
-npx expo start
+npx expo start --tunnel
 
 # Run on Android
 npm run android
 
 # Run on iOS (Mac only)
 npm run ios
+
+# Clean reinstall (if issues occur)
+rm -rf node_modules package-lock.json .expo
+npm install --legacy-peer-deps
 ```
 
 ---
@@ -255,6 +260,17 @@ npm run ios
    - Missing after dependency reinstall
    - Solution: `npm install babel-preset-expo --legacy-peer-deps`
 
+5. **React Native version mismatch (Black screen on mobile)**
+   - Error: "JavaScript version: 0.77.0, Native version: 0.81.4"
+   - Cause: Expo Go app requires specific React Native version
+   - Solution: Update package.json to use `react-native: 0.81.5` and all Expo packages to SDK 54 compatible versions
+   - Run: `rm -rf node_modules package-lock.json && npm install --legacy-peer-deps`
+
+6. **Expo Go media library limitation**
+   - Warning: "Expo Go can no longer provide full access to the media library"
+   - Cause: Android permission changes
+   - Solution: Create a development build for full functionality
+
 ### Useful Commands
 ```bash
 # Clean reinstall
@@ -273,11 +289,31 @@ npx serve dist
 
 ---
 
+## Current Status
+
+### Working
+- ✅ Login/Logout with Supabase Auth
+- ✅ Auth state persistence (AsyncStorage)
+- ✅ Navigation between screens
+- ✅ Dark theme UI matching web
+
+### Known Limitations
+- ⚠️ **Gallery scan not working in Expo Go**: Android permission changes require a development build for full media library access
+- ⚠️ **Manual sync only**: Background sync is NOT planned
+
+### To Test Full Functionality
+Gallery scan requires a **development build** instead of Expo Go:
+```bash
+npx expo install expo-dev-client
+npx expo run:android
+```
+
+---
+
 ## Future Enhancements (TODO)
 
-- [ ] Background sync (auto-upload when new photos detected)
-- [ ] Push notifications when sync completes
+- [ ] Create development build for full media access
 - [ ] Photo preview before upload (full-screen view)
-- [ ] Settings screen (sync frequency, data usage options)
+- [ ] Settings screen (data usage options)
 - [ ] Group assignment during sync
 - [ ] Offline queue for poor connectivity
