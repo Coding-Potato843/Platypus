@@ -54,6 +54,13 @@ export interface AuthState {
   error: string | null;
 }
 
+// Gallery filter types
+export interface GalleryFilter {
+  startDate: Date | null;
+  endDate: Date | null;
+  locationSearch: string;
+}
+
 // Navigation types
 export type RootStackParamList = {
   Login: undefined;

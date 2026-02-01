@@ -200,3 +200,82 @@ function formatExifDate(exifDate: string): string {
     return new Date().toISOString();
   }
 }
+
+/**
+ * Fetch all photos from device gallery with pagination and optional date filter
+ * Used for manual gallery picker
+ */
+export async function fetchAllPhotos(options: {
+  limit?: number;
+  after?: string;
+  createdAfter?: Date | null;
+  createdBefore?: Date | null;
+}): Promise<{
+  photos: PhotoAsset[];
+  hasNextPage: boolean;
+  endCursor: string | undefined;
+}> {
+  const { limit = 50, after, createdAfter, createdBefore } = options;
+
+  // Build query options with date filters
+  const queryOptions: MediaLibrary.AssetsOptions = {
+    mediaType: MediaLibrary.MediaType.photo,
+    sortBy: [[MediaLibrary.SortBy.creationTime, false]], // Newest first
+    first: limit,
+    after: after,
+  };
+
+  // Add date range filter (native level filtering)
+  if (createdAfter) {
+    queryOptions.createdAfter = createdAfter.getTime();
+  }
+  if (createdBefore) {
+    // Include the entire end date
+    const endOfDay = new Date(createdBefore);
+    endOfDay.setHours(23, 59, 59, 999);
+    queryOptions.createdBefore = endOfDay.getTime();
+  }
+
+  const result = await MediaLibrary.getAssetsAsync(queryOptions);
+
+  const photos: PhotoAsset[] = [];
+
+  for (const asset of result.assets) {
+    // Get EXIF data for GPS coordinates
+    let exifData: PhotoAsset['exif'] = undefined;
+    try {
+      const assetInfo = await MediaLibrary.getAssetInfoAsync(asset, {
+        shouldDownloadFromNetwork: false,
+      });
+      if (assetInfo.exif) {
+        exifData = {
+          DateTimeOriginal: assetInfo.exif.DateTimeOriginal as string | undefined,
+          GPSLatitude: assetInfo.exif.GPSLatitude as number | undefined,
+          GPSLongitude: assetInfo.exif.GPSLongitude as number | undefined,
+        };
+      }
+    } catch (exifError) {
+      console.warn(`EXIF read failed for ${asset.filename}:`, exifError);
+    }
+
+    photos.push({
+      id: asset.id,
+      uri: asset.uri,
+      filename: asset.filename,
+      creationTime: asset.creationTime,
+      modificationTime: asset.modificationTime,
+      width: asset.width,
+      height: asset.height,
+      mediaType: asset.mediaType,
+      exif: exifData,
+      selected: false, // NOT pre-selected (user must select manually)
+      location: null,
+    });
+  }
+
+  return {
+    photos,
+    hasNextPage: result.hasNextPage,
+    endCursor: result.endCursor,
+  };
+}

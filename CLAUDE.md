@@ -493,4 +493,28 @@ APK is downloaded from Expo dashboard after build completes.
 - ✅ Photo upload to Supabase
 - ✅ EXIF extraction (date, GPS)
 - ✅ Reverse geocoding (GPS → location name)
+- ✅ **Gallery Picker** - 동기화 시점 이전 사진도 선택 가능
+- ✅ **Date Range Filter** - 연도/월 직접 선택으로 기간 필터링
+- ✅ **Location Search** - 위치명 텍스트 검색
 - ❌ Background sync not planned (manual sync only)
+
+### Gallery Picker Feature (NEW)
+동기화 시점(`last_sync_at`) 이전의 이미지도 업로드할 수 있도록 갤러리에서 직접 선택하는 기능.
+
+**Two Sync Methods:**
+1. **갤러리 스캔** - 기존 방식. `last_sync_at` 이후 사진만 자동 스캔
+2. **갤러리에서 선택** - 전체 갤러리에서 날짜/위치 필터링하여 수동 선택
+
+**Components:**
+- `GalleryPickerModal.tsx` - 전체 갤러리 모달 (무한 스크롤, 필터링)
+- `DateRangePicker.tsx` - 연도/월 직접 선택 (스크롤 리스트 + 증감 버튼)
+- `FilterBar.tsx` - 접이식 필터 UI
+
+**Filtering:**
+- **Date Range**: MediaLibrary API의 `createdAfter`/`createdBefore` 옵션 사용 (네이티브 레벨)
+- **Location Search**: 클라이언트 사이드 텍스트 검색 (부분 일치)
+
+**Date Picker UI:**
+- 연도/월 스크롤 리스트로 직접 선택
+- "−1년", "+1년", "−1개월", "+1개월" 버튼으로 빠른 조정
+- 네이티브 모듈 불필요 (Expo Go에서도 작동)

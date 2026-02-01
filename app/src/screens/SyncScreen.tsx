@@ -1,17 +1,18 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   Alert,
-  SafeAreaView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList, PhotoAsset } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { PhotoGrid } from '../components/PhotoGrid';
 import { LoadingOverlay } from '../components/LoadingOverlay';
+import { GalleryPickerModal } from '../components/GalleryPickerModal';
 import {
   requestMediaLibraryPermission,
   fetchPhotosAfterDate,
@@ -32,12 +33,16 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
   const [isScanning, setIsScanning] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
   const [isUploading, setIsUploading] = useState(false);
+  const [isGalleryPickerVisible, setIsGalleryPickerVisible] = useState(false);
 
   const selectedCount = photos.filter(p => p.selected).length;
   // Supabase timestamp 컬럼은 'Z' 없이 반환하므로 UTC로 파싱하기 위해 'Z' 추가
   const lastSyncDate = profile?.last_sync_at
     ? new Date(profile.last_sync_at.endsWith('Z') ? profile.last_sync_at : profile.last_sync_at + 'Z')
     : null;
+
+  // 이미 추가된 사진 ID Set (갤러리 피커에서 중복 방지용)
+  const existingPhotoIds = useMemo(() => new Set(photos.map(p => p.id)), [photos]);
 
   // Request permission on mount
   useEffect(() => {
@@ -175,6 +180,31 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
     ]);
   }, [logout]);
 
+  // Handle gallery picker open
+  const handleOpenGalleryPicker = useCallback(async () => {
+    if (!hasPermission) {
+      const granted = await requestMediaLibraryPermission();
+      if (!granted) {
+        Alert.alert('권한 필요', '갤러리 접근 권한이 필요합니다.');
+        return;
+      }
+      setHasPermission(true);
+    }
+    setIsGalleryPickerVisible(true);
+  }, [hasPermission]);
+
+  // Handle selected photos from gallery picker
+  const handleGalleryPickerComplete = useCallback((selectedPhotos: PhotoAsset[]) => {
+    if (selectedPhotos.length === 0) return;
+
+    // Merge with existing photos, avoiding duplicates
+    setPhotos(prev => {
+      const existingIds = new Set(prev.map(p => p.id));
+      const newPhotos = selectedPhotos.filter(p => !existingIds.has(p.id));
+      return [...prev, ...newPhotos];
+    });
+  }, []);
+
   // Format date for display
   const formatDate = (date: Date | null) => {
     if (!date) return '없음';
@@ -211,16 +241,21 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
         <Text style={styles.syncDate}>{formatDate(lastSyncDate)}</Text>
       </View>
 
-      {/* Scan button */}
+      {/* Empty state with scan buttons */}
       {photos.length === 0 && (
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>📷</Text>
           <Text style={styles.emptyText}>
             갤러리를 스캔하여{'\n'}새로운 사진을 찾습니다
           </Text>
-          <TouchableOpacity style={styles.scanButton} onPress={handleScanGallery}>
-            <Text style={styles.scanButtonText}>갤러리 스캔</Text>
-          </TouchableOpacity>
+          <View style={styles.emptyButtons}>
+            <TouchableOpacity style={styles.scanButton} onPress={handleScanGallery}>
+              <Text style={styles.scanButtonText}>갤러리 스캔</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.pickButton} onPress={handleOpenGalleryPicker}>
+              <Text style={styles.pickButtonText}>갤러리에서 선택</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
@@ -256,6 +291,12 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
               <Text style={styles.rescanButtonText}>다시 스캔</Text>
             </TouchableOpacity>
             <TouchableOpacity
+              style={styles.addMoreButton}
+              onPress={handleOpenGalleryPicker}
+            >
+              <Text style={styles.addMoreButtonText}>추가 선택</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
               style={[styles.uploadButton, selectedCount === 0 && styles.uploadButtonDisabled]}
               onPress={handleUpload}
               disabled={selectedCount === 0}
@@ -284,6 +325,14 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
           </Text>
         </View>
       )}
+
+      {/* Gallery Picker Modal */}
+      <GalleryPickerModal
+        visible={isGalleryPickerVisible}
+        onClose={() => setIsGalleryPickerVisible(false)}
+        onPhotosSelected={handleGalleryPickerComplete}
+        existingPhotoIds={existingPhotoIds}
+      />
     </SafeAreaView>
   );
 }
@@ -350,14 +399,31 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     marginBottom: 24,
   },
+  emptyButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
   scanButton: {
     backgroundColor: '#06b6d4',
-    paddingHorizontal: 32,
+    paddingHorizontal: 24,
     paddingVertical: 16,
     borderRadius: 12,
   },
   scanButtonText: {
     color: '#0f172a',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  pickButton: {
+    backgroundColor: '#334155',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#06b6d4',
+  },
+  pickButtonText: {
+    color: '#06b6d4',
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -398,19 +464,33 @@ const styles = StyleSheet.create({
   },
   rescanButton: {
     flex: 1,
-    padding: 16,
+    padding: 12,
     borderRadius: 12,
     backgroundColor: '#334155',
     alignItems: 'center',
   },
   rescanButtonText: {
     color: '#f1f5f9',
-    fontSize: 16,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  addMoreButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#334155',
+    borderWidth: 1,
+    borderColor: '#06b6d4',
+    alignItems: 'center',
+  },
+  addMoreButtonText: {
+    color: '#06b6d4',
+    fontSize: 14,
     fontWeight: '500',
   },
   uploadButton: {
-    flex: 2,
-    padding: 16,
+    flex: 1.5,
+    padding: 12,
     borderRadius: 12,
     backgroundColor: '#06b6d4',
     alignItems: 'center',

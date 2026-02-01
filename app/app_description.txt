@@ -39,19 +39,22 @@ app/
 │   ├── config/
 │   │   └── supabase.ts         # Supabase client (AsyncStorage session)
 │   ├── types/
-│   │   └── index.ts            # TypeScript types (User, Photo, etc.)
+│   │   └── index.ts            # TypeScript types (User, Photo, GalleryFilter, etc.)
 │   ├── hooks/
 │   │   └── useAuth.ts          # Auth state hook (login, logout, profile)
 │   ├── services/
 │   │   ├── auth.ts             # Auth functions (login, logout, getSession)
-│   │   ├── photos.ts           # Photo upload (gallery scan, upload to Supabase)
+│   │   ├── photos.ts           # Photo upload (gallery scan, fetchAllPhotos, upload)
 │   │   └── geocoding.ts        # Reverse geocoding (GPS → location name)
 │   ├── components/
 │   │   ├── LoadingOverlay.tsx  # Full-screen loading modal
-│   │   └── PhotoGrid.tsx       # Photo grid with selection checkmarks
+│   │   ├── PhotoGrid.tsx       # Photo grid with selection checkmarks
+│   │   ├── GalleryPickerModal.tsx  # Gallery picker with filtering (NEW)
+│   │   ├── DateRangePicker.tsx     # Year/month date picker (NEW)
+│   │   └── FilterBar.tsx           # Collapsible filter UI (NEW)
 │   └── screens/
 │       ├── LoginScreen.tsx     # Email/password login form
-│       └── SyncScreen.tsx      # Main sync UI (scan, select, upload)
+│       └── SyncScreen.tsx      # Main sync UI (scan, gallery picker, upload)
 └── assets/
     ├── icon.png                # App icon (1024x1024)
     ├── splash.png              # Splash screen
@@ -70,7 +73,9 @@ app/
 
 ### 2. Gallery Sync (SyncScreen.tsx)
 
-**Workflow:**
+**Two Sync Methods:**
+
+#### Method 1: "갤러리 스캔" (Auto Scan)
 1. User taps "갤러리 스캔" button
 2. App requests gallery permission (expo-media-library)
 3. Scans all photos from device
@@ -81,28 +86,72 @@ app/
 8. Photos uploaded to Supabase Storage + Database
 9. `last_sync_at` updated in user profile
 
+#### Method 2: "갤러리에서 선택" (Manual Picker - NEW)
+1. User taps "갤러리에서 선택" button
+2. Opens GalleryPickerModal with ALL gallery photos (no date filter)
+3. User can apply filters:
+   - **Date Range**: Select start/end year-month
+   - **Location Search**: Text search for location name
+4. User taps to SELECT wanted photos (NOT pre-selected)
+5. User taps "선택 완료" → Photos added to main list
+6. User taps "업로드" to upload
+
 **Key UX:**
-- Photos are selected by DEFAULT (checkmark visible)
-- Tap to DESELECT (opposite of typical gallery pickers)
+- **Auto Scan**: Photos are selected by DEFAULT (checkmark visible)
+- **Gallery Picker**: Photos are NOT selected by default (user selects manually)
 - "전체 선택" / "전체 해제" buttons for bulk operations
 - Progress indicator during upload
+- "추가 선택" button to add more photos after initial selection
 
-### 3. Photo Upload (services/photos.ts)
+### 3. Gallery Picker Modal (GalleryPickerModal.tsx) - NEW
 
-**Upload Flow:**
-```
-1. Read photo as base64 (FileSystem.readAsStringAsync)
-2. Convert to Uint8Array
-3. Upload to Supabase Storage: {userId}/{timestamp}_{random}.{ext}
-4. Get public URL
-5. Insert record to 'photos' table with metadata:
-   - user_id
-   - url (public URL)
-   - date_taken (from EXIF or file creationTime)
-   - location (from reverse geocoding, if GPS available)
-```
+**Features:**
+- Full-screen modal with infinite scroll (50 photos per batch)
+- Native-level date filtering (`createdAfter`/`createdBefore` in MediaLibrary API)
+- Client-side location search (partial text match)
+- Background geocoding for visible photos
+- Duplicate prevention (already-added photos shown as disabled)
 
-### 4. Reverse Geocoding (services/geocoding.ts)
+**Filter UI (FilterBar.tsx):**
+- Collapsible filter section
+- Date range with DateRangePicker
+- Location text input with clear button
+- "필터 초기화" button
+
+**DateRangePicker.tsx:**
+- Year/Month scroll list selection (not native calendar)
+- Increment/Decrement buttons: "−1년", "+1년", "−1개월", "+1개월"
+- Future date prevention (max = current date)
+- No native module dependency (works in Expo Go)
+
+### 4. Photo Services (services/photos.ts)
+
+**Key Functions:**
+
+1. **`fetchPhotosAfterDate(afterDate)`** - Auto scan
+   - Fetches photos with `creationTime > afterDate`
+   - Pre-selects all photos (`selected: true`)
+   - Used by "갤러리 스캔" button
+
+2. **`fetchAllPhotos(options)`** - Manual picker (NEW)
+   - Fetches all photos with pagination (50 per batch)
+   - Supports native date filtering: `createdAfter`, `createdBefore`
+   - Does NOT pre-select photos (`selected: false`)
+   - Returns `{ photos, hasNextPage, endCursor }`
+
+3. **`uploadPhoto(userId, photo)`** - Single upload
+   - Read photo as base64 (FileSystem.readAsStringAsync)
+   - Convert to Uint8Array
+   - Upload to Supabase Storage: `{userId}/{timestamp}_{random}.{ext}`
+   - Get public URL
+   - Reverse geocode if GPS available
+   - Insert record to 'photos' table
+
+4. **`uploadPhotos(userId, photos, onProgress)`** - Batch upload
+   - Sequential upload with progress tracking
+   - Returns `{ success, failed }` counts
+
+### 5. Reverse Geocoding (services/geocoding.ts)
 - Uses OpenStreetMap Nominatim API (free, no API key)
 - Rate limited: 1 request per second
 - Converts GPS coordinates → location name
@@ -172,6 +221,10 @@ interface PhotoAsset {
   uri: string;               // Local file URI
   filename: string;
   creationTime: number;      // Timestamp (ms)
+  modificationTime: number;
+  width: number;
+  height: number;
+  mediaType: string;
   exif?: {
     DateTimeOriginal?: string;
     GPSLatitude?: number;
@@ -186,6 +239,13 @@ interface UserProfile {
   email: string;
   username: string;
   last_sync_at: string | null;  // ISO date string
+}
+
+// NEW: Gallery filter for picker modal
+interface GalleryFilter {
+  startDate: Date | null;    // Filter start (year-month)
+  endDate: Date | null;      // Filter end (year-month)
+  locationSearch: string;    // Location text search
 }
 ```
 
@@ -239,6 +299,7 @@ After build completes, download the APK from Expo dashboard and install on devic
 
 ## Testing Checklist
 
+### Auto Scan ("갤러리 스캔")
 1. **Login**: Use existing Platypus web account
 2. **Permission**: Grant gallery access when prompted
 3. **Scan**: Tap "갤러리 스캔" to load photos
@@ -246,6 +307,16 @@ After build completes, download the APK from Expo dashboard and install on devic
 5. **Upload**: Tap "업로드" and watch progress
 6. **Verify on Web**: Login to web frontend, check uploaded photos appear
 7. **Incremental Sync**: Upload again, verify only NEW photos shown
+
+### Gallery Picker ("갤러리에서 선택") - NEW
+1. **Open Picker**: Tap "갤러리에서 선택" to open modal
+2. **Infinite Scroll**: Scroll down to load more photos
+3. **Date Filter**: Set start/end date, verify filtered results
+4. **Location Filter**: Search for location name (e.g., "서울")
+5. **Selection**: Tap photos to select (not pre-selected)
+6. **Confirm**: Tap "선택 완료" to add to main list
+7. **Upload**: Verify selected photos upload correctly
+8. **Old Photos**: Confirm photos before `last_sync_at` can be selected
 
 ---
 
@@ -343,11 +414,16 @@ npx serve dist
 - ✅ Photo upload to Supabase Storage
 - ✅ Reverse geocoding (GPS → location name)
 - ✅ Incremental sync (only photos after last_sync_at)
+- ✅ **Gallery Picker Modal** - Select any photos regardless of sync date (NEW)
+- ✅ **Date Range Filter** - Year/month selection with native-level filtering (NEW)
+- ✅ **Location Search** - Text-based location filtering (NEW)
+- ✅ **Custom DateRangePicker** - No native module dependency (NEW)
 
 ### Notes
 - **Development build required**: Expo Go has limitations with media library access
 - **Manual sync only**: Background sync is NOT planned
 - **expo-file-system/legacy**: Uses legacy API for `readAsStringAsync`
+- **Gallery Picker works in Expo Go**: DateRangePicker is pure JS, no native modules
 
 ---
 
@@ -358,3 +434,10 @@ npx serve dist
 - [ ] Group assignment during sync
 - [ ] Offline queue for poor connectivity
 - [ ] iOS development build
+
+## Completed Enhancements
+
+- [x] **Gallery Picker** - Select photos before last_sync_at
+- [x] **Date Range Filter** - Native-level date filtering
+- [x] **Location Search** - Client-side text filtering
+- [x] **Custom Date Picker** - Year/month scroll selection without native modules
