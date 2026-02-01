@@ -244,7 +244,6 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
       {/* Empty state with scan buttons */}
       {photos.length === 0 && (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyIcon}>📷</Text>
           <Text style={styles.emptyText}>
             갤러리를 스캔하여{'\n'}새로운 사진을 찾습니다
           </Text>
@@ -387,10 +386,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
-  },
-  emptyIcon: {
-    fontSize: 64,
-    marginBottom: 16,
   },
   emptyText: {
     fontSize: 16,

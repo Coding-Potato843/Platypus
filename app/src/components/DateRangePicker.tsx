@@ -141,15 +141,9 @@ export function DateRangePicker({
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <TouchableOpacity onPress={() => setPickerMode(null)}>
-                <Text style={styles.modalCancel}>취소</Text>
-              </TouchableOpacity>
               <Text style={styles.modalTitle}>
                 {pickerMode === 'start' ? '시작 날짜' : '종료 날짜'}
               </Text>
-              <TouchableOpacity onPress={handleConfirm}>
-                <Text style={styles.modalConfirm}>확인</Text>
-              </TouchableOpacity>
             </View>
 
             <View style={styles.pickerContainer}>
@@ -210,62 +204,14 @@ export function DateRangePicker({
               </View>
             </View>
 
-            {/* Increment/Decrement Buttons */}
-            <View style={styles.adjustContainer}>
-              <View style={styles.adjustRow}>
-                <Text style={styles.adjustLabel}>연도</Text>
-                <View style={styles.adjustButtons}>
-                  <TouchableOpacity
-                    style={styles.adjustButton}
-                    onPress={() => setSelectedYear(prev => prev - 1)}
-                  >
-                    <Text style={styles.adjustButtonText}>−1년</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.adjustButton}
-                    onPress={() => setSelectedYear(prev => Math.min(prev + 1, new Date().getFullYear()))}
-                  >
-                    <Text style={styles.adjustButtonText}>+1년</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-              <View style={styles.adjustRow}>
-                <Text style={styles.adjustLabel}>월</Text>
-                <View style={styles.adjustButtons}>
-                  <TouchableOpacity
-                    style={styles.adjustButton}
-                    onPress={() => {
-                      if (selectedMonth === 0) {
-                        setSelectedMonth(11);
-                        setSelectedYear(prev => prev - 1);
-                      } else {
-                        setSelectedMonth(prev => prev - 1);
-                      }
-                    }}
-                  >
-                    <Text style={styles.adjustButtonText}>−1개월</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.adjustButton}
-                    onPress={() => {
-                      const now = new Date();
-                      const isCurrentYear = selectedYear === now.getFullYear();
-                      const maxMonth = isCurrentYear ? now.getMonth() : 11;
-
-                      if (selectedMonth === 11) {
-                        if (selectedYear < now.getFullYear()) {
-                          setSelectedMonth(0);
-                          setSelectedYear(prev => prev + 1);
-                        }
-                      } else if (selectedMonth < maxMonth) {
-                        setSelectedMonth(prev => prev + 1);
-                      }
-                    }}
-                  >
-                    <Text style={styles.adjustButtonText}>+1개월</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
+            {/* Action Buttons */}
+            <View style={styles.actionButtons}>
+              <TouchableOpacity style={styles.cancelButton} onPress={() => setPickerMode(null)}>
+                <Text style={styles.cancelButtonText}>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmButton} onPress={handleConfirm}>
+                <Text style={styles.confirmButtonText}>확인</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -337,8 +283,6 @@ const styles = StyleSheet.create({
     maxHeight: '80%',
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
@@ -346,15 +290,6 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     color: '#f1f5f9',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modalCancel: {
-    color: '#94a3b8',
-    fontSize: 16,
-  },
-  modalConfirm: {
-    color: '#06b6d4',
     fontSize: 16,
     fontWeight: '600',
   },
@@ -396,37 +331,35 @@ const styles = StyleSheet.create({
     color: '#0f172a',
     fontWeight: '600',
   },
-  adjustContainer: {
+  actionButtons: {
+    flexDirection: 'row',
     padding: 16,
+    gap: 12,
     borderTopWidth: 1,
     borderTopColor: '#334155',
-    gap: 12,
   },
-  adjustRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  adjustLabel: {
-    color: '#94a3b8',
-    fontSize: 14,
-    width: 40,
-  },
-  adjustButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  adjustButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: '#334155',
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    backgroundColor: '#7f1d1d',
     borderRadius: 8,
-    minWidth: 80,
     alignItems: 'center',
   },
-  adjustButtonText: {
-    color: '#f1f5f9',
-    fontSize: 14,
-    fontWeight: '500',
+  cancelButtonText: {
+    color: '#fecaca',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  confirmButton: {
+    flex: 1,
+    paddingVertical: 14,
+    backgroundColor: '#0891b2',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  confirmButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

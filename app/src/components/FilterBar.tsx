@@ -59,7 +59,6 @@ export function FilterBar({
         onPress={handleToggle}
       >
         <View style={styles.toggleContent}>
-          <Text style={styles.filterIcon}>🔍</Text>
           <Text style={[styles.toggleText, hasActiveFilter && styles.toggleTextActive]}>
             필터
           </Text>
@@ -144,9 +143,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  filterIcon: {
-    fontSize: 16,
   },
   toggleText: {
     color: '#94a3b8',
