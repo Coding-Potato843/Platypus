@@ -23,6 +23,9 @@ Photo sharing web app with photo import, group organization, friend sharing, and
 ### 2. Photo Management
 - **Import**: Incremental import (only new photos since last scan)
 - **Gallery**: Responsive grid (2-5 cols), lazy loading, hover effects, pagination (20/page)
+- **Sorting**: Two dropdown selectors for sort field and order
+  - Sort Field: 촬영 시간 (`date_taken`) / 업로드 시간 (`created_at`)
+  - Sort Order: 최신순 (`desc`) / 오래된순 (`asc`)
 - **Detail Modal**: Metadata, group assignment, download, delete
 - **Data Model**: `{ id, url, date, location, groupIds[], author? }`
 
@@ -186,7 +189,8 @@ Auto-deploys on push to main branch.
 ### api.js
 ```javascript
 // Photos
-getPhotos(userId, params), getPhoto(photoId), uploadPhoto(userId, file, metadata)
+getPhotos(userId, params)  // params: { sortField, sortOrder, limit, offset, location, startDate, endDate }
+getPhoto(photoId), uploadPhoto(userId, file, metadata)
 uploadPhotos(userId, photos), deletePhoto(photoId, userId), updatePhotoGroups(photoId, groupIds)
 
 // Groups
@@ -229,6 +233,10 @@ importSelectedPhotos()       // Upload selected photos to Supabase
 // Account Deletion
 confirmDeleteAccount()   // Show confirmation modal
 handleDeleteAccount()    // Execute account deletion
+
+// Sorting
+handleSortFieldChange(field)  // Change sort field (date_taken/created_at)
+handleSortOrderChange(order)  // Change sort order (asc/desc)
 ```
 
 ### utils/exif.js
@@ -364,6 +372,7 @@ confirmDeleteAccount() → handleDeleteAccount() → deleteAccount() (auth.js)
 - Upload progress indicator
 - Last scan date tracking and filtering
 - **Duplicate detection** - SHA-256 hash-based duplicate photo prevention (web & mobile)
+- **Gallery sorting** - Sort by date_taken or created_at, ascending or descending (two dropdowns)
 
 ### Required Setup
 Run these in **Supabase SQL Editor** before using the app:
@@ -457,6 +466,11 @@ The app uses Korean UI text. Key terminology:
 | Permission Required | 갤러리 접근 권한 필요 | Permission modal title |
 | Go to Settings | 설정으로 이동 | Permission modal button |
 | I Understand | 알겠습니다 | Permission modal dismiss button |
+| Sort | 정렬 | Sort dropdown label |
+| Taken Time | 촬영 시간 | Sort by date_taken (photo capture/download time) |
+| Upload Time | 업로드 시간 | Sort by created_at (upload timestamp) |
+| Newest First | 최신순 | Descending order |
+| Oldest First | 오래된순 | Ascending order |
 
 **Note**: The word "동기화" (sync) is NOT used in the UI. Use "불러오기" (import/load) or "스캔" (scan) instead.
 
