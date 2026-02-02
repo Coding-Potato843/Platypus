@@ -143,9 +143,13 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
               const result = await uploadPhotos(
                 user.id,
                 selectedPhotos,
-                (current, total) => {
+                (current, total, status) => {
                   setUploadProgress({ current, total });
-                  setLoadingMessage(`업로드 중... ${current}/${total}`);
+                  if (status === 'hashing') {
+                    setLoadingMessage(`중복 검사 중... ${current}/${total}`);
+                  } else {
+                    setLoadingMessage(`업로드 중... ${current}/${total}`);
+                  }
                 }
               );
 
@@ -156,10 +160,16 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
               // Clear uploaded photos from list
               setPhotos(prev => prev.filter(p => !p.selected));
 
-              Alert.alert(
-                '업로드 완료',
-                `${result.success}장 성공${result.failed > 0 ? `, ${result.failed}장 실패` : ''}`
-              );
+              // Build result message
+              let resultMessage = `${result.success}장 성공`;
+              if (result.skipped > 0) {
+                resultMessage += `, ${result.skipped}장 중복 제외`;
+              }
+              if (result.failed > 0) {
+                resultMessage += `, ${result.failed}장 실패`;
+              }
+
+              Alert.alert('업로드 완료', resultMessage);
             } catch (error) {
               console.error('Upload error:', error);
               Alert.alert('오류', '업로드 중 오류가 발생했습니다.');

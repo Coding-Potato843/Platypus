@@ -78,6 +78,7 @@ Photo sharing web app with photo import, group organization, friend sharing, and
 | url | text | Photo URL |
 | date_taken | timestamp | Capture date |
 | location | text | Location metadata |
+| file_hash | text | SHA-256 hash for duplicate detection |
 | created_at | timestamp | Upload date |
 
 ### groups
@@ -362,6 +363,7 @@ confirmDeleteAccount() → handleDeleteAccount() → deleteAccount() (auth.js)
 - Reverse geocoding (GPS → location name via OpenStreetMap)
 - Upload progress indicator
 - Last scan date tracking and filtering
+- **Duplicate detection** - SHA-256 hash-based duplicate photo prevention (web & mobile)
 
 ### Required Setup
 Run these in **Supabase SQL Editor** before using the app:
@@ -373,7 +375,16 @@ Run these in **Supabase SQL Editor** before using the app:
 2. **RLS policies** - Run `supabase_rls_setup.sql`
    - Enable RLS on all tables (users, photos, groups, photo_groups, friendships)
 
-3. **Account deletion RPC function** (for complete account deletion including auth.users)
+3. **Duplicate detection setup** (for hash-based duplicate photo prevention)
+   ```sql
+   -- Add file_hash column to photos table
+   ALTER TABLE photos ADD COLUMN IF NOT EXISTS file_hash TEXT;
+
+   -- Create index for fast duplicate lookup
+   CREATE INDEX IF NOT EXISTS idx_photos_file_hash ON photos(user_id, file_hash);
+   ```
+
+4. **Account deletion RPC function** (for complete account deletion including auth.users)
    ```sql
    -- Drop if exists
    DROP FUNCTION IF EXISTS public.delete_user_auth();

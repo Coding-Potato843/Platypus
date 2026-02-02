@@ -232,6 +232,22 @@
                     </button>
                 </div>
 
+                <!-- Sort Options -->
+                <div class="sort-container">
+                    <div class="sort-label">
+                        <i class="ph ph-sort-ascending"></i>
+                        <span>정렬</span>
+                    </div>
+                    <select id="sortFieldSelect" class="sort-select">
+                        <option value="date_taken">촬영 시간</option>
+                        <option value="created_at">업로드 시간</option>
+                    </select>
+                    <select id="sortOrderSelect" class="sort-select">
+                        <option value="desc">최신순</option>
+                        <option value="asc">오래된순</option>
+                    </select>
+                </div>
+
                 <!-- Photo Gallery -->
                 <div class="gallery" id="gallery">
                     <!-- Photos will be dynamically rendered here -->

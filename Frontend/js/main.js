@@ -24,7 +24,9 @@ import {
     getUserStats,
     updateUserProfile,
     updateLastSync,
-    ApiError
+    ApiError,
+    calculateFileHash,
+    checkDuplicateHashes
 } from './services/api.js';
 import { extractExifData, getFileDate, reverseGeocode } from './utils/exif.js';
 
@@ -103,6 +105,8 @@ async function loadPhotos(loadMore = false) {
         const photos = await getPhotos(user.id, {
             limit: state.pagination.photosPerPage,
             offset: state.pagination.myPhotosOffset,
+            sortField: state.sort.field,
+            sortOrder: state.sort.order,
         });
 
         if (photos.length < state.pagination.photosPerPage) {
@@ -254,6 +258,11 @@ const state = {
         intervalId: null,
         hideControlsTimeout: null,
     },
+    // Gallery sort settings
+    sort: {
+        field: 'date_taken', // 'date_taken' (촬영/다운로드 시간) or 'created_at' (업로드 시간)
+        order: 'desc',       // 'asc' (오름차순) or 'desc' (내림차순)
+    },
     selectedSyncPhotos: new Set(),
     syncFiles: [], // {file, preview, date, location, id}
     lastSyncDate: null,
@@ -291,6 +300,8 @@ const elements = {
     friendsGallery: document.getElementById('friendsGallery'),
     groupChips: document.querySelectorAll('.group-chip'),
     manageGroupsBtn: document.getElementById('manageGroupsBtn'),
+    sortFieldSelect: document.getElementById('sortFieldSelect'),
+    sortOrderSelect: document.getElementById('sortOrderSelect'),
 
     // FAB
     slideshowBtn: document.getElementById('slideshowBtn'),
@@ -1026,6 +1037,27 @@ function filterByGroup(groupId) {
 }
 
 // ============================================
+// Sort Functions
+// ============================================
+/**
+ * Handle sort field change
+ * @param {string} field - Sort field: 'date_taken' or 'created_at'
+ */
+async function handleSortFieldChange(field) {
+    state.sort.field = field;
+    await loadPhotos(false);
+}
+
+/**
+ * Handle sort order change
+ * @param {string} order - Sort order: 'asc' or 'desc'
+ */
+async function handleSortOrderChange(order) {
+    state.sort.order = order;
+    await loadPhotos(false);
+}
+
+// ============================================
 // Photo Modal
 // ============================================
 function openPhotoModal(photoId) {
@@ -1388,7 +1420,7 @@ function resetSyncToInitial() {
 }
 
 /**
- * Import selected photos to Supabase
+ * Import selected photos to Supabase with duplicate detection
  */
 async function importSelectedPhotos() {
     if (state.selectedSyncPhotos.size === 0) {
@@ -1405,8 +1437,6 @@ async function importSelectedPhotos() {
     // Get selected files
     const selectedFiles = state.syncFiles.filter(f => state.selectedSyncPhotos.has(f.id));
     const totalCount = selectedFiles.length;
-    let uploadedCount = 0;
-    let errorCount = 0;
 
     // Show upload progress state
     elements.syncInitialState.style.display = 'none';
@@ -1415,28 +1445,20 @@ async function importSelectedPhotos() {
     elements.importPhotosBtn.disabled = true;
 
     // Update progress UI
-    const updateProgress = () => {
-        const percent = (uploadedCount / totalCount) * 100;
+    const updateProgress = (current, total, status) => {
+        const percent = (current / total) * 100;
         elements.uploadProgressBar.style.width = `${percent}%`;
-        elements.uploadProgressText.textContent = `${uploadedCount} / ${totalCount}`;
+        if (status === 'hashing') {
+            elements.uploadProgressText.textContent = `중복 검사 중... ${current} / ${total}`;
+        } else {
+            elements.uploadProgressText.textContent = `업로드 중... ${current} / ${total}`;
+        }
     };
 
-    updateProgress();
+    updateProgress(0, totalCount, 'hashing');
 
-    // Upload photos one by one
-    for (const photoData of selectedFiles) {
-        try {
-            await uploadPhoto(user.id, photoData.file, {
-                date: photoData.date,
-                location: photoData.location,
-            });
-            uploadedCount++;
-        } catch (error) {
-            console.error('Upload error:', error);
-            errorCount++;
-        }
-        updateProgress();
-    }
+    // Upload with duplicate detection
+    const { uploaded, errors, skipped } = await uploadPhotos(user.id, selectedFiles, updateProgress);
 
     // Update last sync time
     try {
@@ -1466,10 +1488,24 @@ async function importSelectedPhotos() {
     renderMyPhotos();
 
     // Show result toast
+    const uploadedCount = uploaded.length;
+    const errorCount = errors.length;
+    const skippedCount = skipped.length;
+
+    let message = `${uploadedCount}개 업로드 완료`;
+    if (skippedCount > 0) {
+        message += `, ${skippedCount}개 중복 제외`;
+    }
     if (errorCount > 0) {
-        showToast(`${uploadedCount}개 업로드 완료, ${errorCount}개 실패`, 'warning');
+        message += `, ${errorCount}개 실패`;
+    }
+
+    if (errorCount > 0) {
+        showToast(message, 'warning');
+    } else if (skippedCount > 0 && uploadedCount === 0) {
+        showToast('모든 사진이 이미 업로드되어 있습니다', 'info');
     } else {
-        showToast(`${uploadedCount}개의 사진을 가져왔습니다`, 'success');
+        showToast(message, 'success');
     }
 }
 
@@ -2194,6 +2230,14 @@ function setupEventListeners() {
     // Group chips
     elements.groupChips.forEach(chip => {
         chip.addEventListener('click', () => filterByGroup(chip.dataset.group));
+    });
+
+    // Sort selects
+    elements.sortFieldSelect.addEventListener('change', (e) => {
+        handleSortFieldChange(e.target.value);
+    });
+    elements.sortOrderSelect.addEventListener('change', (e) => {
+        handleSortOrderChange(e.target.value);
     });
 
     // Group management

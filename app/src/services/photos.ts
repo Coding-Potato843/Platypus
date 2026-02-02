@@ -1,8 +1,62 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
+import * as Crypto from 'expo-crypto';
 import { supabase } from '../config/supabase';
 import { PhotoAsset } from '../types';
 import { reverseGeocode } from './geocoding';
+
+// ============================================
+// Hash Utilities (Duplicate Detection)
+// ============================================
+
+/**
+ * Calculate SHA-256 hash of a file
+ * @param uri - Local file URI
+ * @returns Hex string of hash
+ */
+export async function calculateFileHash(uri: string): Promise<string> {
+  // Read file as base64
+  const base64 = await FileSystem.readAsStringAsync(uri, {
+    encoding: 'base64',
+  });
+
+  // Calculate SHA-256 hash
+  const hash = await Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    base64,
+    { encoding: Crypto.CryptoEncoding.HEX }
+  );
+
+  return hash;
+}
+
+/**
+ * Check which hashes already exist in database (batch query)
+ * @param userId - User ID
+ * @param hashes - Array of file hashes to check
+ * @returns Set of existing hashes
+ */
+export async function checkDuplicateHashes(
+  userId: string,
+  hashes: string[]
+): Promise<Set<string>> {
+  if (!hashes || hashes.length === 0) {
+    return new Set();
+  }
+
+  const { data, error } = await supabase
+    .from('photos')
+    .select('file_hash')
+    .eq('user_id', userId)
+    .in('file_hash', hashes);
+
+  if (error) {
+    console.error('Error checking duplicate hashes:', error);
+    return new Set();
+  }
+
+  return new Set(data.map((row: { file_hash: string }) => row.file_hash));
+}
 
 /**
  * Request media library permission (including media location for EXIF GPS data)
@@ -162,11 +216,14 @@ function generateFileName(userId: string, originalName: string): string {
 
 /**
  * Upload a single photo to Supabase
+ * @param userId - User ID
+ * @param photo - Photo asset to upload
+ * @param fileHash - Optional pre-calculated file hash
  */
 export async function uploadPhoto(
   userId: string,
   photo: PhotoAsset,
-  onProgress?: (progress: number) => void
+  fileHash?: string | null
 ): Promise<void> {
   // Read file as base64
   const base64 = await FileSystem.readAsStringAsync(photo.uri, {
@@ -222,7 +279,7 @@ export async function uploadPhoto(
     location = await reverseGeocode(photo.exif.GPSLatitude, photo.exif.GPSLongitude);
   }
 
-  // Insert record to database
+  // Insert record to database (with file_hash for duplicate detection)
   const { error: dbError } = await supabase
     .from('photos')
     .insert({
@@ -230,6 +287,7 @@ export async function uploadPhoto(
       url: urlData.publicUrl,
       date_taken: dateTaken,
       location: location,
+      file_hash: fileHash || null,
     });
 
   if (dbError) {
@@ -241,29 +299,64 @@ export async function uploadPhoto(
 }
 
 /**
- * Upload multiple photos with progress tracking
+ * Upload multiple photos with duplicate detection and progress tracking
+ * @param userId - User ID
+ * @param photos - Array of photo assets to upload
+ * @param onProgress - Progress callback (current, total, status)
+ * @returns Upload results with success, failed, and skipped counts
  */
 export async function uploadPhotos(
   userId: string,
   photos: PhotoAsset[],
-  onProgress?: (current: number, total: number) => void
-): Promise<{ success: number; failed: number }> {
+  onProgress?: (current: number, total: number, status: 'hashing' | 'uploading') => void
+): Promise<{ success: number; failed: number; skipped: number }> {
+  // Step 1: Calculate hashes for all photos
+  const photosWithHash: Array<{ photo: PhotoAsset; hash: string | null }> = [];
+  for (let i = 0; i < photos.length; i++) {
+    try {
+      const hash = await calculateFileHash(photos[i].uri);
+      photosWithHash.push({ photo: photos[i], hash });
+    } catch (err) {
+      console.warn(`Hash calculation failed for ${photos[i].filename}:`, err);
+      photosWithHash.push({ photo: photos[i], hash: null });
+    }
+    onProgress?.(i + 1, photos.length, 'hashing');
+  }
+
+  // Step 2: Check for duplicates (batch query)
+  const hashes = photosWithHash
+    .map(p => p.hash)
+    .filter((h): h is string => h !== null);
+  const existingHashes = await checkDuplicateHashes(userId, hashes);
+
+  // Step 3: Filter out duplicates
+  const photosToUpload: Array<{ photo: PhotoAsset; hash: string | null }> = [];
+  let skipped = 0;
+  for (const item of photosWithHash) {
+    if (item.hash && existingHashes.has(item.hash)) {
+      skipped++;
+    } else {
+      photosToUpload.push(item);
+    }
+  }
+
+  // Step 4: Upload non-duplicate photos
   let success = 0;
   let failed = 0;
 
-  for (let i = 0; i < photos.length; i++) {
+  for (let i = 0; i < photosToUpload.length; i++) {
+    const { photo, hash } = photosToUpload[i];
     try {
-      await uploadPhoto(userId, photos[i]);
+      await uploadPhoto(userId, photo, hash);
       success++;
     } catch (error) {
-      console.error(`Failed to upload photo ${photos[i].filename}:`, error);
+      console.error(`Failed to upload photo ${photo.filename}:`, error);
       failed++;
     }
-
-    onProgress?.(i + 1, photos.length);
+    onProgress?.(i + 1, photosToUpload.length, 'uploading');
   }
 
-  return { success, failed };
+  return { success, failed, skipped };
 }
 
 /**

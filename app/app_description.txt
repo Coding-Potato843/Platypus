@@ -480,6 +480,7 @@ npx serve dist
 - ✅ **Custom DateRangePicker** - No native module dependency
 - ✅ **All Albums Scan** - Includes Downloads, Telegram, WhatsApp, KakaoTalk
 - ✅ **Downloaded Image Support** - Proper date handling using modificationTime
+- ✅ **Duplicate Detection** - SHA-256 hash-based duplicate photo prevention
 
 ### Notes
 - **Development build required**: Expo Go has limitations with media library access
@@ -508,3 +509,4 @@ npx serve dist
 - [x] **Downloaded Image Date Fix** - Uses modificationTime for proper dating
 - [x] **UI Cleanup** - Removed camera icon, filter icon; streamlined date picker buttons
 - [x] **Permission Modal** - First-launch only permission request (persisted via AsyncStorage), step-by-step guide, "알겠습니다" dismiss button
+- [x] **Duplicate Detection** - SHA-256 hash-based duplicate photo prevention (uses expo-crypto)

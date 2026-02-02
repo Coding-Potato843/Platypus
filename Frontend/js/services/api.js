@@ -42,13 +42,63 @@ export class ApiError extends Error {
 }
 
 // ============================================
+// Hash Utilities (Duplicate Detection)
+// ============================================
+
+/**
+ * Calculate SHA-256 hash of a file using Web Crypto API
+ * @param {File} file - File object to hash
+ * @returns {Promise<string>} - Hex string of hash
+ */
+export async function calculateFileHash(file) {
+    const buffer = await file.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Check which hashes already exist in database (batch query)
+ * @param {string} userId - User ID
+ * @param {string[]} hashes - Array of file hashes to check
+ * @returns {Promise<Set<string>>} - Set of existing hashes
+ */
+export async function checkDuplicateHashes(userId, hashes) {
+    if (!hashes || hashes.length === 0) {
+        return new Set();
+    }
+
+    const { data, error } = await supabase
+        .from('photos')
+        .select('file_hash')
+        .eq('user_id', userId)
+        .in('file_hash', hashes);
+
+    if (error) {
+        console.error('Error checking duplicate hashes:', error);
+        return new Set();
+    }
+
+    return new Set(data.map(row => row.file_hash));
+}
+
+// ============================================
 // Photo API (Supabase)
 // ============================================
 
 /**
  * Get user's photos from Supabase
+ * @param {string} userId - User ID
+ * @param {Object} params - Query parameters
+ * @param {string} params.sortField - Sort field: 'date_taken' (촬영/다운로드 시간) or 'created_at' (업로드 시간)
+ * @param {string} params.sortOrder - Sort order: 'asc' (오름차순) or 'desc' (내림차순)
  */
 export async function getPhotos(userId, params = {}) {
+    // Determine sort field and order
+    const sortField = params.sortField || 'date_taken';
+    const sortOrder = params.sortOrder || 'desc';
+    const ascending = sortOrder === 'asc';
+
     let query = supabase
         .from('photos')
         .select(`
@@ -56,7 +106,7 @@ export async function getPhotos(userId, params = {}) {
             photo_groups (group_id)
         `)
         .eq('user_id', userId)
-        .order('date_taken', { ascending: false });
+        .order(sortField, { ascending });
 
     // Filter by location (partial match)
     if (params.location) {
@@ -125,6 +175,9 @@ export async function getPhoto(photoId) {
 
 /**
  * Upload photo to Supabase Storage and create record
+ * @param {string} userId - User ID
+ * @param {File} file - File to upload
+ * @param {Object} metadata - Photo metadata (date, location, fileHash)
  */
 export async function uploadPhoto(userId, file, metadata = {}) {
     // Generate unique filename
@@ -145,7 +198,7 @@ export async function uploadPhoto(userId, file, metadata = {}) {
         .from('photos')
         .getPublicUrl(fileName);
 
-    // Create photo record in database
+    // Create photo record in database (with file_hash for duplicate detection)
     const { data: photoData, error: dbError } = await supabase
         .from('photos')
         .insert({
@@ -153,6 +206,7 @@ export async function uploadPhoto(userId, file, metadata = {}) {
             url: urlData.publicUrl,
             date_taken: metadata.date || new Date().toISOString(),
             location: metadata.location || null,
+            file_hash: metadata.fileHash || null,
         })
         .select()
         .single();
@@ -174,25 +228,64 @@ export async function uploadPhoto(userId, file, metadata = {}) {
 }
 
 /**
- * Upload multiple photos
+ * Upload multiple photos with duplicate detection
+ * @param {string} userId - User ID
+ * @param {Array} photos - Array of {file, date, location} objects
+ * @param {Function} onProgress - Progress callback (current, total, status)
+ * @returns {Object} - { uploaded, errors, skipped }
  */
-export async function uploadPhotos(userId, photos) {
+export async function uploadPhotos(userId, photos, onProgress) {
     const results = [];
     const errors = [];
+    const skipped = [];
 
-    for (const photo of photos) {
+    // Step 1: Calculate hashes for all photos
+    onProgress?.(0, photos.length, 'hashing');
+    const photosWithHash = [];
+    for (let i = 0; i < photos.length; i++) {
+        try {
+            const hash = await calculateFileHash(photos[i].file);
+            photosWithHash.push({ ...photos[i], fileHash: hash });
+        } catch (err) {
+            console.warn(`Hash calculation failed for ${photos[i].file.name}:`, err);
+            photosWithHash.push({ ...photos[i], fileHash: null });
+        }
+        onProgress?.(i + 1, photos.length, 'hashing');
+    }
+
+    // Step 2: Check for duplicates (batch query)
+    const hashes = photosWithHash
+        .map(p => p.fileHash)
+        .filter(h => h !== null);
+    const existingHashes = await checkDuplicateHashes(userId, hashes);
+
+    // Step 3: Filter out duplicates
+    const photosToUpload = [];
+    for (const photo of photosWithHash) {
+        if (photo.fileHash && existingHashes.has(photo.fileHash)) {
+            skipped.push({ file: photo.file.name, reason: 'duplicate' });
+        } else {
+            photosToUpload.push(photo);
+        }
+    }
+
+    // Step 4: Upload non-duplicate photos
+    for (let i = 0; i < photosToUpload.length; i++) {
+        const photo = photosToUpload[i];
         try {
             const result = await uploadPhoto(userId, photo.file, {
                 date: photo.date,
                 location: photo.location,
+                fileHash: photo.fileHash,
             });
             results.push(result);
         } catch (error) {
             errors.push({ file: photo.file.name, error: error.message });
         }
+        onProgress?.(i + 1, photosToUpload.length, 'uploading');
     }
 
-    return { uploaded: results, errors };
+    return { uploaded: results, errors, skipped };
 }
 
 /**
@@ -770,6 +863,10 @@ export default {
     uploadPhotos,
     deletePhoto,
     updatePhotoGroups,
+
+    // Hash utilities
+    calculateFileHash,
+    checkDuplicateHashes,
 
     // Groups
     getGroups,
