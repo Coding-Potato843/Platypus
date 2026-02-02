@@ -172,9 +172,21 @@ app/
 Downloaded images often lack EXIF data and may have invalid creationTime (0 = 1970-01-01).
 Priority order: EXIF DateTimeOriginal > modificationTime > creationTime > current time
 
-4. **`uploadPhotos(userId, photos, onProgress)`** - Batch upload
+4. **`uploadPhotos(userId, photos, onProgress)`** - Batch upload with duplicate detection
+   - Calculates SHA-256 hash for each photo before upload
+   - Batch queries database to find existing hashes
+   - Skips duplicate photos automatically
    - Sequential upload with progress tracking
-   - Returns `{ success, failed }` counts
+   - Returns `{ success, failed, skipped }` counts
+
+5. **`calculateFileHash(uri)`** - Hash calculation
+   - Uses expo-crypto for SHA-256 hashing
+   - Requires development build (not available in Expo Go)
+   - Returns hex string of file hash
+
+6. **`checkDuplicateHashes(userId, hashes)`** - Duplicate check
+   - Batch query to check multiple hashes at once
+   - Returns Set of existing hashes
 
 ### 6. Reverse Geocoding (services/geocoding.ts)
 - Uses OpenStreetMap Nominatim API (free, no API key)
@@ -182,6 +194,35 @@ Priority order: EXIF DateTimeOriginal > modificationTime > creationTime > curren
 - Converts GPS coordinates → location name
 - Example: (37.5665, 126.9780) → "서울특별시, 중구"
 - Results cached to reduce API calls
+
+### 7. Duplicate Detection (services/photos.ts)
+
+SHA-256 hash-based duplicate photo prevention.
+
+**How It Works:**
+1. Before upload, calculate SHA-256 hash of each photo using expo-crypto
+2. Batch query database to check for existing hashes
+3. Skip photos whose hashes already exist
+4. Upload new photos with hash stored in `file_hash` column
+
+**Progress Callback:**
+```typescript
+onProgress(current: number, total: number, status: 'hashing' | 'uploading')
+```
+
+**UI Feedback:**
+- During hash calculation: "중복 검사 중... X/Y"
+- During upload: "업로드 중... X/Y"
+- Result alert: "3장 성공, 2장 중복 제외"
+
+**Requirements:**
+- **expo-crypto**: Native module required (must use development build, not Expo Go)
+- **Database**: `file_hash` column and index on photos table
+
+**Performance:**
+- Hash calculation: ~100-200ms per 5MB photo
+- Batch query: ~50-100ms for 100 hashes
+- Total overhead: ~2-3 seconds for 100 photos
 
 ---
 
@@ -203,6 +244,7 @@ Priority order: EXIF DateTimeOriginal > modificationTime > creationTime > curren
 | url | text | Photo URL from Storage |
 | date_taken | timestamp | When photo was taken |
 | location | text | Location name |
+| file_hash | text | SHA-256 hash for duplicate detection |
 | created_at | timestamp | Upload time |
 
 ---
@@ -377,6 +419,14 @@ After build completes, download the APK from Expo dashboard and install on devic
 3. **Upload**: Upload the downloaded image
 4. **Verify Date**: Check on web that date is download time (NOT 1970-01-01)
 
+### Duplicate Detection
+1. **First Upload**: Upload a set of photos
+2. **Verify Hashes**: Check database that file_hash column is populated
+3. **Re-upload Same Photos**: Try to upload the same photos again
+4. **Verify Skip**: Confirm message shows "X장 중복 제외"
+5. **Mixed Upload**: Upload mix of new and duplicate photos
+6. **Verify Partial**: Confirm only new photos are uploaded, duplicates skipped
+
 ---
 
 ## Important Notes
@@ -386,6 +436,8 @@ After build completes, download the APK from Expo dashboard and install on devic
 3. **last_sync_at**: Critical for incremental import - only imports photos newer than this timestamp (last scan date)
 4. **Storage Path**: `{userId}/{timestamp}_{random}.{ext}` (same pattern as web)
 5. **No Registration**: Users must register on web first, then login via app
+6. **Duplicate Detection**: Requires development build (expo-crypto native module). Expo Go will throw "Cannot find native module 'ExpoCrypto'" error
+7. **file_hash Column**: Must be added to photos table before using duplicate detection feature
 
 ---
 
@@ -442,6 +494,11 @@ After build completes, download the APK from Expo dashboard and install on devic
    - Cause: expo-file-system v19 changed API
    - Solution: Import from `expo-file-system/legacy` instead
 
+9. **expo-crypto native module not found**
+   - Error: "Cannot find native module 'ExpoCrypto'"
+   - Cause: expo-crypto requires native code, not available in Expo Go
+   - Solution: Use EAS Build to create development APK with native modules included
+
 ### Useful Commands
 ```bash
 # Clean reinstall
@@ -483,11 +540,12 @@ npx serve dist
 - ✅ **Duplicate Detection** - SHA-256 hash-based duplicate photo prevention
 
 ### Notes
-- **Development build required**: Expo Go has limitations with media library access
+- **Development build required**: Expo Go has limitations with media library access and lacks expo-crypto native module
 - **Manual import only**: Background upload is NOT planned
 - **expo-file-system/legacy**: Uses legacy API for `readAsStringAsync`
 - **Gallery Picker works in Expo Go**: DateRangePicker is pure JS, no native modules
 - **modificationTime**: Used for filtering instead of creationTime to catch downloaded images
+- **expo-crypto**: Native module for SHA-256 hashing, requires development build for duplicate detection
 
 ---
 

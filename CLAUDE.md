@@ -565,6 +565,7 @@ APK is downloaded from Expo dashboard after build completes.
 - ✅ **Location Search** - Location name text search
 - ✅ **All Albums Scan** - Includes Downloads, Telegram, WhatsApp, KakaoTalk folders
 - ✅ **Downloaded Image Support** - Uses modificationTime for proper date handling
+- ✅ **Duplicate Detection** - SHA-256 hash-based duplicate prevention (requires development build for expo-crypto)
 - ❌ Background upload not planned (manual import only)
 
 ### Gallery Picker Feature
@@ -609,3 +610,58 @@ Date priority when uploading photos:
 4. **Current time** - Fallback if all timestamps invalid
 
 This fixes the "1970-01-01" bug for downloaded images that lack EXIF data.
+
+### Duplicate Detection
+
+SHA-256 hash-based duplicate photo prevention implemented on both web and mobile.
+
+**How It Works:**
+1. **Hash Calculation**: Before upload, calculate SHA-256 hash of each photo file
+2. **Batch Query**: Send all hashes to database in a single query to check for existing photos
+3. **Duplicate Filtering**: Skip photos whose hashes already exist in the database
+4. **Upload with Hash**: Upload new photos with their hash stored in `file_hash` column
+
+**Implementation:**
+
+| Platform | Hash Library | Notes |
+|----------|-------------|-------|
+| Web | Web Crypto API (`crypto.subtle`) | Native browser API, fast |
+| Mobile | expo-crypto | Requires development build (not available in Expo Go) |
+
+**API Functions:**
+```javascript
+// Web (api.js)
+calculateFileHash(file)              // Returns SHA-256 hex string
+checkDuplicateHashes(userId, hashes) // Returns Set of existing hashes
+uploadPhotos(userId, photos, onProgress) // Handles duplicate detection automatically
+
+// Mobile (photos.ts)
+calculateFileHash(uri)               // Returns SHA-256 hex string
+checkDuplicateHashes(userId, hashes) // Returns Set of existing hashes
+uploadPhotos(userId, photos, onProgress) // Handles duplicate detection automatically
+```
+
+**Progress Callback:**
+```javascript
+onProgress(current, total, status)
+// status: 'hashing' | 'uploading'
+```
+
+**UI Feedback:**
+- During hash calculation: "중복 검사 중... X/Y"
+- During upload: "업로드 중... X/Y"
+- Result: "3개 업로드 완료, 2개 중복 제외" or "모든 사진이 이미 업로드되어 있습니다"
+
+**Database Requirement:**
+```sql
+-- Add file_hash column
+ALTER TABLE photos ADD COLUMN IF NOT EXISTS file_hash TEXT;
+
+-- Create index for fast lookup (user_id + file_hash composite)
+CREATE INDEX IF NOT EXISTS idx_photos_file_hash ON photos(user_id, file_hash);
+```
+
+**Performance:**
+- Hash calculation: ~100-200ms per 5MB photo
+- Batch query: ~50-100ms for 100 hashes (with index)
+- Total overhead for 100 photos: ~2-3 seconds for hashing + <100ms for duplicate check
