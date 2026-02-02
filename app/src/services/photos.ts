@@ -84,19 +84,33 @@ async function assetToPhotoAsset(
   asset: MediaLibrary.Asset,
   selected: boolean = true
 ): Promise<PhotoAsset> {
-  // Get EXIF data for GPS coordinates (may fail if ACCESS_MEDIA_LOCATION denied)
+  // Get EXIF data and location (may fail if ACCESS_MEDIA_LOCATION denied)
   let exifData: PhotoAsset['exif'] = undefined;
   try {
     const assetInfo = await MediaLibrary.getAssetInfoAsync(asset, {
       shouldDownloadFromNetwork: false,
     });
-    if (assetInfo.exif) {
-      exifData = {
-        DateTimeOriginal: assetInfo.exif.DateTimeOriginal as string | undefined,
-        GPSLatitude: assetInfo.exif.GPSLatitude as number | undefined,
-        GPSLongitude: assetInfo.exif.GPSLongitude as number | undefined,
-      };
+
+    // GPS coordinates: prefer assetInfo.location (standard format), fallback to EXIF
+    let gpsLatitude: number | undefined;
+    let gpsLongitude: number | undefined;
+
+    // Primary: assetInfo.location (expo-media-library standard format)
+    if (assetInfo.location?.latitude && assetInfo.location?.longitude) {
+      gpsLatitude = assetInfo.location.latitude;
+      gpsLongitude = assetInfo.location.longitude;
     }
+    // Fallback: EXIF data (varies by platform)
+    else if (assetInfo.exif?.GPSLatitude && assetInfo.exif?.GPSLongitude) {
+      gpsLatitude = assetInfo.exif.GPSLatitude as number;
+      gpsLongitude = assetInfo.exif.GPSLongitude as number;
+    }
+
+    exifData = {
+      DateTimeOriginal: assetInfo.exif?.DateTimeOriginal as string | undefined,
+      GPSLatitude: gpsLatitude,
+      GPSLongitude: gpsLongitude,
+    };
   } catch (exifError) {
     console.warn(`EXIF read failed for ${asset.filename}:`, exifError);
   }
