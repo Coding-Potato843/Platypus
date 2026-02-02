@@ -284,7 +284,7 @@ onProgress(current: number, total: number, status: 'hashing' | 'uploading')
 
 | English | Korean (UI) | Notes |
 |---------|-------------|-------|
-| Last Scan Date | 마지막 스캔 날짜 | Displayed on SyncScreen |
+| Last Scan Date | 마지막 스캔 날짜 | Displayed on SyncScreen (mobile uses relative format) |
 | Gallery Scan | 갤러리 스캔 | Auto-scan button |
 | Select from Gallery | 갤러리에서 선택 | Manual picker button |
 | Scan Complete | 스캔 완료 | Alert title |
@@ -438,6 +438,7 @@ After build completes, download the APK from Expo dashboard and install on devic
 5. **No Registration**: Users must register on web first, then login via app
 6. **Duplicate Detection**: Requires development build (expo-crypto native module). Expo Go will throw "Cannot find native module 'ExpoCrypto'" error
 7. **file_hash Column**: Must be added to photos table before using duplicate detection feature
+8. **Date Format Difference**: Web shows exact datetime (`YYYY-MM-DD HH:mm`), mobile shows relative time for last scan
 
 ---
 

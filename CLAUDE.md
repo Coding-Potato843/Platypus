@@ -237,6 +237,10 @@ handleDeleteAccount()    // Execute account deletion
 // Sorting
 handleSortFieldChange(field)  // Change sort field (date_taken/created_at)
 handleSortOrderChange(order)  // Change sort order (asc/desc)
+
+// Utility Functions
+formatDate(dateString)        // Format date as "YYYY년 M월 D일" (Korean locale)
+formatDateTime(dateString)    // Format datetime as "YYYY-MM-DD HH:mm" (exact time)
 ```
 
 ### utils/exif.js
@@ -373,6 +377,7 @@ confirmDeleteAccount() → handleDeleteAccount() → deleteAccount() (auth.js)
 - Last scan date tracking and filtering
 - **Duplicate detection** - SHA-256 hash-based duplicate photo prevention (web & mobile)
 - **Gallery sorting** - Sort by date_taken or created_at, ascending or descending (two dropdowns)
+- **Exact datetime display** - Last scan date shows exact `YYYY-MM-DD HH:mm` format instead of relative time ("today", "yesterday")
 
 ### Required Setup
 Run these in **Supabase SQL Editor** before using the app:
@@ -458,7 +463,7 @@ The app uses Korean UI text. Key terminology:
 |---------|-------------|-------|
 | Import Photos | 사진 불러오기 | Main button to import photos |
 | Select Photo Files | 사진 파일 선택 | File picker button |
-| Last Scan | 마지막 스캔 | Timestamp of last gallery scan |
+| Last Scan | 마지막 스캔 | Exact datetime format: `YYYY-MM-DD HH:mm` (e.g., "2024-01-20 14:30") |
 | Gallery Scan | 갤러리 스캔 | Auto-scan photos after last scan date |
 | Select from Gallery | 갤러리에서 선택 | Manual photo picker |
 | Scan Complete | 스캔 완료 | Alert title after scanning |
