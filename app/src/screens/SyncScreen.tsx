@@ -5,9 +5,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  AppState,
-  AppStateStatus,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList, PhotoAsset } from '../types';
@@ -48,36 +47,22 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
   // 이미 추가된 사진 ID Set (갤러리 피커에서 중복 방지용)
   const existingPhotoIds = useMemo(() => new Set(photos.map(p => p.id)), [photos]);
 
-  // Check permission on mount and show modal if needed
+  // Check permission on mount and show modal only on first launch
   useEffect(() => {
     (async () => {
       const { status } = await MediaLibrary.getPermissionsAsync();
       if (status === 'granted') {
         setHasPermission(true);
       } else {
-        // Permission not granted - show modal to direct to settings
         setHasPermission(false);
-        setShowPermissionModal(true);
+        // Show modal only if never shown before (first app launch)
+        const hasSeenModal = await AsyncStorage.getItem('permissionModalShown');
+        if (!hasSeenModal) {
+          setShowPermissionModal(true);
+        }
       }
     })();
   }, []);
-
-  // Re-check permission when app comes back from settings
-  useEffect(() => {
-    const handleAppStateChange = async (nextAppState: AppStateStatus) => {
-      if (nextAppState === 'active' && showPermissionModal) {
-        // User returned to app, re-check permission
-        const { status } = await MediaLibrary.getPermissionsAsync();
-        if (status === 'granted') {
-          setHasPermission(true);
-          setShowPermissionModal(false);
-        }
-      }
-    };
-
-    const subscription = AppState.addEventListener('change', handleAppStateChange);
-    return () => subscription.remove();
-  }, [showPermissionModal]);
 
   // Scan gallery for new photos
   const handleScanGallery = useCallback(async () => {
@@ -356,7 +341,16 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
       {/* Permission Request Modal */}
       <PermissionModal
         visible={showPermissionModal}
-        onClose={() => setShowPermissionModal(false)}
+        onClose={async () => {
+          // Mark as shown so it never appears again
+          await AsyncStorage.setItem('permissionModalShown', 'true');
+          // Re-check permission
+          const { status } = await MediaLibrary.getPermissionsAsync();
+          if (status === 'granted') {
+            setHasPermission(true);
+          }
+          setShowPermissionModal(false);
+        }}
       />
     </SafeAreaView>
   );

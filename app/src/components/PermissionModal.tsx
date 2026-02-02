@@ -58,13 +58,19 @@ export function PermissionModal({ visible, onClose }: PermissionModalProps) {
             </View>
           </View>
 
-          {/* Button */}
+          {/* Buttons */}
           <View style={styles.buttonContainer}>
             <TouchableOpacity
               style={styles.primaryButton}
               onPress={handleOpenSettings}
             >
               <Text style={styles.primaryButtonText}>설정으로 이동</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={onClose}
+            >
+              <Text style={styles.secondaryButtonText}>알겠습니다</Text>
             </TouchableOpacity>
           </View>
 
@@ -164,6 +170,15 @@ const styles = StyleSheet.create({
     color: '#0f172a',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  secondaryButton: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  secondaryButtonText: {
+    color: '#94a3b8',
+    fontSize: 15,
   },
   privacyNote: {
     fontSize: 12,
