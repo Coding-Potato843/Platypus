@@ -445,8 +445,27 @@ The app uses Korean UI text. Key terminology:
 | Photo Management App | 사진 관리 앱 | App subtitle on login screen |
 | Permission Required | 갤러리 접근 권한 필요 | Permission modal title |
 | Go to Settings | 설정으로 이동 | Permission modal button |
+| I Understand | 알겠습니다 | Permission modal dismiss button |
 
 **Note**: The word "동기화" (sync) is NOT used in the UI. Use "불러오기" (import/load) or "스캔" (scan) instead.
+
+### Permission Modal (Mobile App)
+
+Shows only ONCE on first app launch after installation. Uses AsyncStorage to persist the "shown" flag.
+
+**UI Components:**
+- Title: "갤러리 접근 권한 필요"
+- Description: Explains why permission is needed
+- Step-by-step guide box: "1. 권한 → 2. 사진 및 동영상 → 3. 허용"
+- "설정으로 이동" button (primary, cyan) - Opens app settings via `Linking.openSettings()`
+- "알겠습니다" button (secondary, gray text) - Dismisses modal permanently
+- Privacy note at bottom
+
+**Behavior:**
+1. First app launch → Check permission → If not granted, check AsyncStorage
+2. If `permissionModalShown` not set → Show modal
+3. User clicks "알겠습니다" → Save `permissionModalShown: true` to AsyncStorage, close modal
+4. Modal NEVER shows again (even after app restart)
 
 ---
 
@@ -511,7 +530,7 @@ APK is downloaded from Expo dashboard after build completes.
 ### Current Status
 - ✅ Login/Logout working
 - ✅ Auth state persistence (AsyncStorage)
-- ✅ **Permission Request Modal** - First-launch permission request with step-by-step guide
+- ✅ **Permission Request Modal** - First-launch only (persisted via AsyncStorage)
 - ✅ Gallery auto-scan (development build)
 - ✅ Photo upload to Supabase
 - ✅ EXIF extraction (date, GPS)

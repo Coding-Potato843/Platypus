@@ -73,12 +73,14 @@ app/
 - Auto-navigation to SyncScreen on successful login
 
 ### 2. Permission Request (PermissionModal.tsx)
-- Shows on first app launch if gallery permission not granted
+- Shows only ONCE on first app launch after installation (persisted via AsyncStorage)
 - Clean UI explaining why permission is needed
 - Step-by-step guide: "1. 권한 → 2. 사진 및 동영상 → 3. 허용"
-- "설정으로 이동" button to open app settings directly
-- Auto re-checks permission when returning from settings (AppState listener)
+- Two buttons:
+  - "설정으로 이동" (primary, cyan) - Opens app settings via `Linking.openSettings()`
+  - "알겠습니다" (secondary, gray text) - Dismisses modal permanently
 - Privacy note reassuring user about data safety
+- Uses AsyncStorage key `permissionModalShown` to prevent showing again
 
 ### 3. Gallery Import (SyncScreen.tsx)
 
@@ -246,7 +248,8 @@ Priority order: EXIF DateTimeOriginal > modificationTime > creationTime > curren
 | Scan Complete | 스캔 완료 | Alert title |
 | Photo Management App | 사진 관리 앱 | LoginScreen subtitle |
 | Permission Required | 갤러리 접근 권한 필요 | Permission modal title |
-| Go to Settings | 설정으로 이동 | Permission modal button |
+| Go to Settings | 설정으로 이동 | Permission modal primary button |
+| I Understand | 알겠습니다 | Permission modal dismiss button |
 
 **Note**: The word "동기화" (sync) is NOT used in the UI. Use "불러오기" (import/load) or "스캔" (scan) instead.
 
@@ -338,9 +341,17 @@ After build completes, download the APK from Expo dashboard and install on devic
 
 ## Testing Checklist
 
+### Permission Modal (First Launch)
+1. **Fresh Install**: Uninstall and reinstall app (or clear app data)
+2. **First Launch**: Modal should appear on first launch
+3. **Dismiss**: Tap "알겠습니다" to close modal
+4. **Restart App**: Modal should NOT appear again
+5. **Grant Permission**: Go to Settings manually and grant permission
+6. **Verify**: App should work normally without modal appearing
+
 ### Auto Scan ("갤러리 스캔")
 1. **Login**: Use existing Platypus web account
-2. **Permission**: Grant gallery access when prompted
+2. **Permission**: Grant gallery access when prompted (if not already)
 3. **Scan**: Tap "갤러리 스캔" to load photos
 4. **Selection**: Verify photos are pre-selected, tap to deselect
 5. **Upload**: Tap "업로드" and watch progress
@@ -456,7 +467,7 @@ npx serve dist
 - ✅ Auth state persistence (AsyncStorage)
 - ✅ Navigation between screens
 - ✅ Dark theme UI matching web
-- ✅ **Permission Request Modal** - Shows on first launch, handles denied state
+- ✅ **Permission Request Modal** - Shows only once on first launch (persisted via AsyncStorage)
 - ✅ Gallery auto-scan (expo-media-library)
 - ✅ EXIF extraction (date, GPS coordinates)
 - ✅ ACCESS_MEDIA_LOCATION permission for GPS data
@@ -496,4 +507,4 @@ npx serve dist
 - [x] **All Albums Scan** - Downloads, Telegram, WhatsApp, KakaoTalk support
 - [x] **Downloaded Image Date Fix** - Uses modificationTime for proper dating
 - [x] **UI Cleanup** - Removed camera icon, filter icon; streamlined date picker buttons
-- [x] **Permission Modal** - First-launch permission request with step-by-step guide and settings redirect
+- [x] **Permission Modal** - First-launch only permission request (persisted via AsyncStorage), step-by-step guide, "알겠습니다" dismiss button
