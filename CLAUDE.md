@@ -515,8 +515,10 @@ See `app/app_description.txt` for detailed documentation.
 ### Key Features
 - Login with existing Platypus account (Supabase Auth)
 - Native gallery access (expo-media-library)
-- Incremental import (only photos after last scan date via `last_sync_at`)
-- Pre-selected photos (user deselects unwanted)
+- **Tab-based UI** with two separate import modes:
+  - **Gallery Scan Tab**: Auto-scan photos after last scan date, updates `last_sync_at` on upload
+  - **Select from Gallery Tab**: Manual selection from entire gallery, does NOT update `last_sync_at`
+- Pre-selected photos in scan mode (user deselects unwanted)
 - Reverse geocoding (GPS → location name)
 
 ### Development Commands
@@ -572,6 +574,7 @@ APK is downloaded from Expo dashboard after build completes.
 - ✅ Photo upload to Supabase
 - ✅ EXIF extraction (date, GPS)
 - ✅ Reverse geocoding (GPS → location name)
+- ✅ **Tab-based UI** - Separate tabs for "Gallery Scan" and "Select from Gallery"
 - ✅ **Gallery Picker** - Select photos from before last sync date
 - ✅ **Date Range Filter** - Year/month direct selection for date filtering
 - ✅ **Location Search** - Location name text search
@@ -579,21 +582,50 @@ APK is downloaded from Expo dashboard after build completes.
 - ✅ **Downloaded Image Support** - Uses modificationTime for proper date handling
 - ✅ **Duplicate Detection** - SHA-256 hash-based duplicate prevention (requires development build for expo-crypto)
 - ✅ **GPS Location Fix** - Uses `assetInfo.location` (standard format) with EXIF fallback
+- ✅ **Selective last_sync_at Update** - Only "Gallery Scan" tab updates last scan date; "Select from Gallery" does not
 - ❌ Background upload not planned (manual import only)
 
-### Gallery Picker Feature
-Feature to manually select photos from the gallery, allowing upload of images from before last scan date.
+### Tab-Based Import UI
 
-**Two Import Methods:**
-1. **Gallery Scan (갤러리 스캔)** - Auto-scans photos after last scan date (uses `modificationTime`)
-2. **Select from Gallery (갤러리에서 선택)** - Manual selection from entire gallery with date/location filtering
+The mobile app uses a tab-based UI to clearly separate two import methods, each with independent photo lists and different behaviors.
+
+**Tab UI Design:**
+- Two tabs at the top: "갤러리 스캔" (Gallery Scan) / "갤러리에서 선택" (Select from Gallery)
+- Active tab highlighted with cyan background
+- Each tab maintains its own independent photo list
+- Switching tabs preserves photos in each list
+
+**Tab 1: Gallery Scan (갤러리 스캔)**
+- Shows "마지막 스캔 날짜" (Last Scan Date) info box
+- Auto-scans photos after last scan date using `modificationTime`
+- Photos are PRE-SELECTED by default (user deselects unwanted)
+- On upload: Updates `last_sync_at` to current time
+- Button: "갤러리 스캔" / "다시 스캔" (Rescan)
+
+**Tab 2: Select from Gallery (갤러리에서 선택)**
+- Does NOT show last scan date (hidden intentionally)
+- Opens GalleryPickerModal for manual photo selection
+- Photos are NOT pre-selected (user selects wanted)
+- On upload: Does NOT update `last_sync_at`
+- Allows selecting photos from any date (before or after last scan)
+- Button: "갤러리에서 선택" / "추가 선택" (Add More)
+
+**Key Behavior Differences:**
+
+| Feature | Gallery Scan Tab | Select from Gallery Tab |
+|---------|-----------------|------------------------|
+| Last scan date display | Shown | Hidden |
+| Photo pre-selection | All selected | None selected |
+| Date filtering | After last scan only | No restriction |
+| Updates last_sync_at | ✅ Yes | ❌ No |
 
 **Components:**
+- `SyncScreen.tsx` - Main screen with tab UI and independent photo lists (`scanPhotos`, `pickerPhotos`)
 - `GalleryPickerModal.tsx` - Full gallery modal (infinite scroll, filtering)
 - `DateRangePicker.tsx` - Year/month direct selection (scroll list only)
 - `FilterBar.tsx` - Collapsible filter UI (no icon)
 
-**Filtering:**
+**Filtering (in Gallery Picker Modal):**
 - **Date Range**: Uses MediaLibrary API's `createdAfter`/`createdBefore` options (native level filtering)
 - **Location Search**: Client-side text search (partial match)
 

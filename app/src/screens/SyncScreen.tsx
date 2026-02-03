@@ -27,9 +27,18 @@ type SyncScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Sync'>;
 };
 
+type TabType = 'scan' | 'picker';
+
 export function SyncScreen({ navigation }: SyncScreenProps) {
   const { user, profile, logout, refreshProfile } = useAuth();
-  const [photos, setPhotos] = useState<PhotoAsset[]>([]);
+
+  // 현재 활성 탭
+  const [activeTab, setActiveTab] = useState<TabType>('scan');
+
+  // 각 탭별 사진 목록 (독립적으로 관리)
+  const [scanPhotos, setScanPhotos] = useState<PhotoAsset[]>([]);
+  const [pickerPhotos, setPickerPhotos] = useState<PhotoAsset[]>([]);
+
   const [loadingMessage, setLoadingMessage] = useState('');
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
@@ -38,14 +47,19 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [isGalleryPickerVisible, setIsGalleryPickerVisible] = useState(false);
 
-  const selectedCount = photos.filter(p => p.selected).length;
+  // 현재 탭의 사진 목록
+  const currentPhotos = activeTab === 'scan' ? scanPhotos : pickerPhotos;
+  const setCurrentPhotos = activeTab === 'scan' ? setScanPhotos : setPickerPhotos;
+
+  const selectedCount = currentPhotos.filter(p => p.selected).length;
+
   // Supabase timestamp 컬럼은 'Z' 없이 반환하므로 UTC로 파싱하기 위해 'Z' 추가
   const lastSyncDate = profile?.last_sync_at
     ? new Date(profile.last_sync_at.endsWith('Z') ? profile.last_sync_at : profile.last_sync_at + 'Z')
     : null;
 
   // 이미 추가된 사진 ID Set (갤러리 피커에서 중복 방지용)
-  const existingPhotoIds = useMemo(() => new Set(photos.map(p => p.id)), [photos]);
+  const existingPhotoIds = useMemo(() => new Set(pickerPhotos.map(p => p.id)), [pickerPhotos]);
 
   // Check permission on mount and show modal only on first launch
   useEffect(() => {
@@ -80,7 +94,7 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
 
     try {
       const scannedPhotos = await fetchPhotosAfterDate(lastSyncDate);
-      setPhotos(scannedPhotos);
+      setScanPhotos(scannedPhotos);
 
       if (scannedPhotos.length === 0) {
         Alert.alert(
@@ -100,24 +114,24 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
 
   // Toggle photo selection
   const handleToggleSelect = useCallback((id: string) => {
-    setPhotos(prev =>
+    setCurrentPhotos(prev =>
       prev.map(p => (p.id === id ? { ...p, selected: !p.selected } : p))
     );
-  }, []);
+  }, [setCurrentPhotos]);
 
   // Select all photos
   const handleSelectAll = useCallback(() => {
-    setPhotos(prev => prev.map(p => ({ ...p, selected: true })));
-  }, []);
+    setCurrentPhotos(prev => prev.map(p => ({ ...p, selected: true })));
+  }, [setCurrentPhotos]);
 
   // Deselect all photos
   const handleDeselectAll = useCallback(() => {
-    setPhotos(prev => prev.map(p => ({ ...p, selected: false })));
-  }, []);
+    setCurrentPhotos(prev => prev.map(p => ({ ...p, selected: false })));
+  }, [setCurrentPhotos]);
 
   // Upload selected photos
   const handleUpload = useCallback(async () => {
-    const selectedPhotos = photos.filter(p => p.selected);
+    const selectedPhotos = currentPhotos.filter(p => p.selected);
     if (selectedPhotos.length === 0) {
       Alert.alert('알림', '업로드할 사진을 선택해주세요.');
       return;
@@ -153,12 +167,14 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
                 }
               );
 
-              // Update last sync time
-              await updateLastSync(user.id);
-              await refreshProfile();
+              // 갤러리 스캔 탭에서만 마지막 스캔 날짜 업데이트
+              if (activeTab === 'scan') {
+                await updateLastSync(user.id);
+                await refreshProfile();
+              }
 
               // Clear uploaded photos from list
-              setPhotos(prev => prev.filter(p => !p.selected));
+              setCurrentPhotos(prev => prev.filter(p => !p.selected));
 
               // Build result message
               let resultMessage = `${result.success}장 성공`;
@@ -181,7 +197,7 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
         },
       ]
     );
-  }, [photos, user, refreshProfile]);
+  }, [currentPhotos, user, refreshProfile, activeTab, setCurrentPhotos]);
 
   // Handle logout
   const handleLogout = useCallback(() => {
@@ -213,7 +229,7 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
     if (selectedPhotos.length === 0) return;
 
     // Merge with existing photos, avoiding duplicates
-    setPhotos(prev => {
+    setPickerPhotos(prev => {
       const existingIds = new Set(prev.map(p => p.id));
       const newPhotos = selectedPhotos.filter(p => !existingIds.has(p.id));
       return [...prev, ...newPhotos];
@@ -230,6 +246,11 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
       hour: '2-digit',
       minute: '2-digit',
     });
+  };
+
+  // 탭 전환 핸들러
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab);
   };
 
   return (
@@ -250,36 +271,68 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
         </TouchableOpacity>
       </View>
 
-      {/* Last sync info */}
-      <View style={styles.syncInfo}>
-        <Text style={styles.syncLabel}>마지막 스캔 날짜</Text>
-        <Text style={styles.syncDate}>{formatDate(lastSyncDate)}</Text>
+      {/* Tab Buttons */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'scan' && styles.tabActive]}
+          onPress={() => handleTabChange('scan')}
+        >
+          <Text style={[styles.tabText, activeTab === 'scan' && styles.tabTextActive]}>
+            갤러리 스캔
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'picker' && styles.tabActive]}
+          onPress={() => handleTabChange('picker')}
+        >
+          <Text style={[styles.tabText, activeTab === 'picker' && styles.tabTextActive]}>
+            갤러리에서 선택
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Empty state with scan buttons */}
-      {photos.length === 0 && (
+      {/* 갤러리 스캔 탭에서만 마지막 스캔 날짜 표시 */}
+      {activeTab === 'scan' && (
+        <View style={styles.syncInfo}>
+          <Text style={styles.syncLabel}>마지막 스캔 날짜</Text>
+          <Text style={styles.syncDate}>{formatDate(lastSyncDate)}</Text>
+        </View>
+      )}
+
+      {/* 갤러리 스캔 탭 - Empty State */}
+      {activeTab === 'scan' && scanPhotos.length === 0 && (
         <View style={styles.emptyState}>
           <Text style={styles.emptyText}>
-            마지막으로 업로드한 날짜를 기준으로{'\n'}새롭게 생긴 사진을 불러오거나{'\n'}갤러리에서 직접 선택합니다.
+            마지막 스캔 날짜 이후의{'\n'}새로운 사진을 자동으로 불러옵니다.
           </Text>
-          <View style={styles.emptyButtons}>
-            <TouchableOpacity style={styles.scanButton} onPress={handleScanGallery}>
-              <Text style={styles.scanButtonText}>갤러리 스캔</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.pickButton} onPress={handleOpenGalleryPicker}>
-              <Text style={styles.pickButtonText}>갤러리에서 선택</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity style={styles.scanButton} onPress={handleScanGallery}>
+            <Text style={styles.scanButtonText}>갤러리 스캔</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* 갤러리에서 선택 탭 - Empty State */}
+      {activeTab === 'picker' && pickerPhotos.length === 0 && (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyText}>
+            갤러리에서 원하는 사진을{'\n'}직접 선택하여 업로드합니다.
+          </Text>
+          <Text style={styles.emptySubText}>
+            마지막 스캔 날짜와 관계없이{'\n'}모든 사진을 선택할 수 있습니다.
+          </Text>
+          <TouchableOpacity style={styles.pickButton} onPress={handleOpenGalleryPicker}>
+            <Text style={styles.pickButtonText}>갤러리에서 선택</Text>
+          </TouchableOpacity>
         </View>
       )}
 
       {/* Photo grid */}
-      {photos.length > 0 && (
+      {currentPhotos.length > 0 && (
         <>
           {/* Selection controls */}
           <View style={styles.controls}>
             <Text style={styles.photoCount}>
-              {selectedCount} / {photos.length}장 선택됨
+              {selectedCount} / {currentPhotos.length}장 선택됨
             </Text>
             <View style={styles.selectButtons}>
               <TouchableOpacity onPress={handleSelectAll} style={styles.selectButton}>
@@ -293,23 +346,26 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
 
           {/* Photo grid */}
           <View style={styles.gridContainer}>
-            <PhotoGrid photos={photos} onToggleSelect={handleToggleSelect} />
+            <PhotoGrid photos={currentPhotos} onToggleSelect={handleToggleSelect} />
           </View>
 
           {/* Action buttons */}
           <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={styles.rescanButton}
-              onPress={handleScanGallery}
-            >
-              <Text style={styles.rescanButtonText}>다시 스캔</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.addMoreButton}
-              onPress={handleOpenGalleryPicker}
-            >
-              <Text style={styles.addMoreButtonText}>추가 선택</Text>
-            </TouchableOpacity>
+            {activeTab === 'scan' ? (
+              <TouchableOpacity
+                style={styles.rescanButton}
+                onPress={handleScanGallery}
+              >
+                <Text style={styles.rescanButtonText}>다시 스캔</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.addMoreButton}
+                onPress={handleOpenGalleryPicker}
+              >
+                <Text style={styles.addMoreButtonText}>추가 선택</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={[styles.uploadButton, selectedCount === 0 && styles.uploadButtonDisabled]}
               onPress={handleUpload}
@@ -395,12 +451,40 @@ const styles = StyleSheet.create({
     color: '#ef4444',
     fontSize: 14,
   },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#1e293b',
+    borderRadius: 8,
+    margin: 16,
+    marginBottom: 0,
+    padding: 4,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: 6,
+  },
+  tabActive: {
+    backgroundColor: '#06b6d4',
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#94a3b8',
+  },
+  tabTextActive: {
+    color: '#0f172a',
+  },
   syncInfo: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
     backgroundColor: '#1e293b',
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 8,
   },
   syncLabel: {
     fontSize: 14,
@@ -422,15 +506,18 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     textAlign: 'center',
     lineHeight: 24,
-    marginBottom: 24,
+    marginBottom: 12,
   },
-  emptyButtons: {
-    flexDirection: 'row',
-    gap: 12,
+  emptySubText: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
   },
   scanButton: {
     backgroundColor: '#06b6d4',
-    paddingHorizontal: 24,
+    paddingHorizontal: 32,
     paddingVertical: 16,
     borderRadius: 12,
   },
@@ -440,15 +527,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   pickButton: {
-    backgroundColor: '#334155',
-    paddingHorizontal: 24,
+    backgroundColor: '#06b6d4',
+    paddingHorizontal: 32,
     paddingVertical: 16,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#06b6d4',
   },
   pickButtonText: {
-    color: '#06b6d4',
+    color: '#0f172a',
     fontSize: 16,
     fontWeight: 'bold',
   },
