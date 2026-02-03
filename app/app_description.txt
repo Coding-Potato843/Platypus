@@ -82,6 +82,12 @@ app/
 - Privacy note reassuring user about data safety
 - Uses AsyncStorage key `permissionModalShown` to prevent showing again
 
+**Permission Modal Logic (handles reinstall scenario):**
+- Android's Google auto-backup may restore AsyncStorage data on reinstall
+- But permissions are ALWAYS reset on reinstall
+- Fix: If permission status is `undetermined`, ALWAYS show modal (regardless of AsyncStorage)
+- If permission status is `denied`, check AsyncStorage before showing modal
+
 ### 3. Gallery Import (SyncScreen.tsx)
 
 **Tab-Based UI Design:**
@@ -414,13 +420,15 @@ After build completes, download the APK from Expo dashboard and install on devic
 
 ## Testing Checklist
 
-### Permission Modal (First Launch)
+### Permission Modal (First Launch & Reinstall)
 1. **Fresh Install**: Uninstall and reinstall app (or clear app data)
 2. **First Launch**: Modal should appear on first launch
 3. **Dismiss**: Tap "알겠습니다" to close modal
 4. **Restart App**: Modal should NOT appear again
 5. **Grant Permission**: Go to Settings manually and grant permission
 6. **Verify**: App should work normally without modal appearing
+7. **Reinstall Test**: Uninstall app completely, then reinstall
+8. **Verify After Reinstall**: Modal should appear again (even if AsyncStorage was backed up by Google)
 
 ### Tab UI Testing
 1. **Tab Display**: Verify two tabs appear: "갤러리 스캔" and "갤러리에서 선택"
@@ -620,6 +628,7 @@ npx serve dist
 - [x] **Downloaded Image Date Fix** - Uses modificationTime for proper dating
 - [x] **UI Cleanup** - Removed camera icon, filter icon; streamlined date picker buttons
 - [x] **Permission Modal** - First-launch only permission request (persisted via AsyncStorage), step-by-step guide, "알겠습니다" dismiss button
+- [x] **Permission Modal Reinstall Fix** - Fixed modal not showing after app reinstall due to Google auto-backup restoring AsyncStorage; now checks `undetermined` permission status
 - [x] **Duplicate Detection** - SHA-256 hash-based duplicate photo prevention (uses expo-crypto)
 - [x] **GPS Location Fix** - Fixed GPS coordinate extraction to use `assetInfo.location` (expo-media-library standard format) with EXIF fallback
 - [x] **Double Back to Exit** - Press back button twice within 2 seconds to exit app (Android only, toast notification on first press)

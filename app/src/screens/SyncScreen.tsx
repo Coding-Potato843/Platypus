@@ -69,10 +69,18 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
         setHasPermission(true);
       } else {
         setHasPermission(false);
-        // Show modal only if never shown before (first app launch)
-        const hasSeenModal = await AsyncStorage.getItem('permissionModalShown');
-        if (!hasSeenModal) {
+        // Show modal if:
+        // 1. Permission is 'undetermined' (never asked) - this is a fresh install
+        // 2. OR permission is denied but modal was never shown (handles edge cases)
+        // Note: 'undetermined' check is needed because AsyncStorage may be restored
+        // from Google auto-backup on reinstall, but permissions are always reset
+        if (status === 'undetermined') {
           setShowPermissionModal(true);
+        } else {
+          const hasSeenModal = await AsyncStorage.getItem('permissionModalShown');
+          if (!hasSeenModal) {
+            setShowPermissionModal(true);
+          }
         }
       }
     })();

@@ -500,10 +500,17 @@ Shows only ONCE on first app launch after installation. Uses AsyncStorage to per
 - Privacy note at bottom
 
 **Behavior:**
-1. First app launch → Check permission → If not granted, check AsyncStorage
-2. If `permissionModalShown` not set → Show modal
-3. User clicks "알겠습니다" → Save `permissionModalShown: true` to AsyncStorage, close modal
-4. Modal NEVER shows again (even after app restart)
+1. First app launch → Check permission status
+2. If `status === 'undetermined'` → Always show modal (fresh install, permission never asked)
+3. If `status === 'denied'` AND `permissionModalShown` not set → Show modal
+4. User clicks "알겠습니다" → Save `permissionModalShown: true` to AsyncStorage, close modal
+5. Modal shows again after app reinstall (because permission resets to 'undetermined')
+
+**Reinstall Handling:**
+- Android's Google auto-backup may restore AsyncStorage data on reinstall
+- But permissions are ALWAYS reset to `undetermined` on reinstall
+- Fix: Check permission status first - if `undetermined`, show modal regardless of AsyncStorage
+- This ensures modal appears after reinstall even if backup restored the `permissionModalShown` flag
 
 ---
 
