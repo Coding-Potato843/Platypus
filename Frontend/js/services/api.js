@@ -146,6 +146,7 @@ export async function getPhotos(userId, params = {}) {
         id: photo.id,
         url: photo.url,
         date: photo.date_taken,
+        created_at: photo.created_at,
         location: photo.location || '알 수 없음',
         groupIds: photo.photo_groups?.map(pg => pg.group_id) || [],
         author: null, // Own photos have no author
@@ -553,6 +554,7 @@ export async function getFriendsPhotos(userId, params = {}) {
         id: photo.id,
         url: photo.url,
         date: photo.date_taken,
+        created_at: photo.created_at,
         location: photo.location || '알 수 없음',
         groupIds: [],
         author: photo.users?.username || 'Unknown',

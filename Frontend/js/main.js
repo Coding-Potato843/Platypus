@@ -315,6 +315,7 @@ const elements = {
     // Photo Modal Elements
     modalPhoto: document.getElementById('modalPhoto'),
     photoDate: document.getElementById('photoDate'),
+    photoUploadDate: document.getElementById('photoUploadDate'),
     photoLocation: document.getElementById('photoLocation'),
     photoAuthorItem: document.getElementById('photoAuthorItem'),
     photoAuthor: document.getElementById('photoAuthor'),
@@ -1068,6 +1069,7 @@ function openPhotoModal(photoId) {
     // Update modal content
     elements.modalPhoto.src = photo.url;
     elements.photoDate.textContent = `날짜: ${formatDate(photo.date)}`;
+    elements.photoUploadDate.textContent = `업로드: ${formatDate(photo.created_at)}`;
     elements.photoLocation.textContent = `위치: ${photo.location}`;
 
     // Show/hide author
