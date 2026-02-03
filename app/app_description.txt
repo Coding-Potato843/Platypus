@@ -439,6 +439,7 @@ After build completes, download the APK from Expo dashboard and install on devic
 6. **Duplicate Detection**: Requires development build (expo-crypto native module). Expo Go will throw "Cannot find native module 'ExpoCrypto'" error
 7. **file_hash Column**: Must be added to photos table before using duplicate detection feature
 8. **Date Format Difference**: Web shows exact datetime (`YYYY-MM-DD HH:mm`), mobile shows relative time for last scan
+9. **Web vs Mobile Date Filtering**: Web has no client-side date filtering (hash-only), mobile still uses `last_sync_at` for auto-scan
 
 ---
 

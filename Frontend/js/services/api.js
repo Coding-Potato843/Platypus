@@ -64,6 +64,8 @@ export async function calculateFileHash(file) {
  * @returns {Promise<Set<string>>} - Set of existing hashes
  */
 export async function checkDuplicateHashes(userId, hashes) {
+    console.log('[checkDuplicateHashes] Checking for userId:', userId, 'hashes count:', hashes?.length);
+
     if (!hashes || hashes.length === 0) {
         return new Set();
     }
@@ -74,12 +76,16 @@ export async function checkDuplicateHashes(userId, hashes) {
         .eq('user_id', userId)
         .in('file_hash', hashes);
 
+    console.log('[checkDuplicateHashes] Result - data:', data, 'error:', error);
+
     if (error) {
         console.error('Error checking duplicate hashes:', error);
         return new Set();
     }
 
-    return new Set(data.map(row => row.file_hash));
+    const existingHashes = new Set(data.map(row => row.file_hash));
+    console.log('[checkDuplicateHashes] Found existing hashes:', existingHashes.size);
+    return existingHashes;
 }
 
 // ============================================
@@ -292,6 +298,8 @@ export async function uploadPhotos(userId, photos, onProgress) {
  * Delete photo from Supabase
  */
 export async function deletePhoto(photoId, userId) {
+    console.log('[deletePhoto] Starting delete for photoId:', photoId, 'userId:', userId);
+
     // First get the photo to find the storage path
     const { data: photo, error: fetchError } = await supabase
         .from('photos')
@@ -301,27 +309,35 @@ export async function deletePhoto(photoId, userId) {
         .single();
 
     if (fetchError) {
+        console.error('[deletePhoto] Fetch error:', fetchError);
         throw new ApiError(404, 'Photo not found');
     }
+
+    console.log('[deletePhoto] Found photo:', photo);
 
     // Extract file path from URL
     const urlParts = photo.url.split('/photos/');
     const filePath = urlParts.length > 1 ? urlParts[1] : null;
 
     // Delete from database (cascade will handle photo_groups)
-    const { error: dbError } = await supabase
+    const { data: deleteData, error: dbError, count } = await supabase
         .from('photos')
         .delete()
         .eq('id', photoId)
-        .eq('user_id', userId);
+        .eq('user_id', userId)
+        .select();
+
+    console.log('[deletePhoto] Delete result - data:', deleteData, 'error:', dbError, 'count:', count);
 
     if (dbError) {
+        console.error('[deletePhoto] Database delete error:', dbError);
         throw new ApiError(500, dbError.message);
     }
 
     // Delete from storage
     if (filePath) {
-        await supabase.storage.from('photos').remove([filePath]);
+        const { error: storageError } = await supabase.storage.from('photos').remove([filePath]);
+        console.log('[deletePhoto] Storage delete result - error:', storageError);
     }
 
     return { success: true };

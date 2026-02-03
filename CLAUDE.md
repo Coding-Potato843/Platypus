@@ -225,7 +225,7 @@ updateUIForUnauthenticatedUser()                          // Reset UI after logo
 
 // Photo Import
 openSyncModal()              // Open photo import modal
-handleFileSelect(event)      // Handle file selection, extract EXIF, filter by date
+handleFileSelect(event)      // Handle file selection, extract EXIF data
 renderSyncPreview()          // Render photo preview gallery
 processReverseGeocoding()    // Convert GPS coordinates to location names (background)
 importSelectedPhotos()       // Upload selected photos to Supabase
@@ -297,16 +297,16 @@ Mobile-first photo upload workflow:
        ↓
 3. App extracts EXIF data (date, GPS coordinates)
        ↓
-4. Filter: only photos newer than last scan date
+4. Preview with all photos selected (user deselects unwanted)
        ↓
-5. Preview with all photos selected (user deselects unwanted)
+5. Background: Reverse geocoding (GPS → location name)
        ↓
-6. Background: Reverse geocoding (GPS → location name)
+6. User clicks [Import] → Hash-based duplicate check → Upload to Supabase Storage
        ↓
-7. User clicks [Import] → Upload to Supabase Storage
-       ↓
-8. Update last_sync_at timestamp → Refresh gallery
+7. Update last_sync_at timestamp → Refresh gallery
 ```
+
+**Note:** Client-side date filtering was removed. Duplicate detection is now handled server-side via SHA-256 file hash comparison. This allows re-uploading previously deleted photos without browser refresh.
 
 **EXIF Extraction:**
 - Date: `DateTimeOriginal` > `DateTime` > file's `lastModified`
@@ -378,6 +378,7 @@ confirmDeleteAccount() → handleDeleteAccount() → deleteAccount() (auth.js)
 - **Duplicate detection** - SHA-256 hash-based duplicate photo prevention (web & mobile)
 - **Gallery sorting** - Sort by date_taken or created_at, ascending or descending (two dropdowns)
 - **Exact datetime display** - Last scan date shows exact `YYYY-MM-DD HH:mm` format instead of relative time ("today", "yesterday")
+- **Photo re-upload fix** - Removed client-side date filtering; deleted photos can be re-uploaded without browser refresh
 
 ### Required Setup
 Run these in **Supabase SQL Editor** before using the app:

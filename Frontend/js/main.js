@@ -1219,7 +1219,6 @@ async function handleFileSelect(event) {
 
     try {
         const syncFiles = [];
-        let filteredCount = 0;
 
         for (const file of files) {
             // Extract EXIF data
@@ -1228,15 +1227,8 @@ async function handleFileSelect(event) {
             // Use EXIF date or file's lastModified date
             const photoDate = exifData.date || getFileDate(file);
 
-            // Filter by last sync date (only new photos)
-            if (state.lastSyncDate) {
-                const lastSync = new Date(state.lastSyncDate);
-                const fileDate = new Date(photoDate);
-                if (fileDate <= lastSync) {
-                    filteredCount++;
-                    continue;
-                }
-            }
+            // Note: Date-based filtering removed - hash-based duplicate detection handles duplicates
+            // This allows re-uploading photos that were previously deleted
 
             // Create preview URL
             const preview = URL.createObjectURL(file);
@@ -1257,11 +1249,7 @@ async function handleFileSelect(event) {
         hideLoading();
 
         if (syncFiles.length === 0) {
-            if (filteredCount > 0) {
-                showToast(`${filteredCount}개의 사진이 이미 추가되었습니다`, 'info');
-            } else {
-                showToast('선택한 사진이 없습니다', 'warning');
-            }
+            showToast('선택한 사진이 없습니다', 'warning');
             return;
         }
 
@@ -1270,10 +1258,6 @@ async function handleFileSelect(event) {
 
         // Reverse geocode locations in background
         processReverseGeocoding();
-
-        if (filteredCount > 0) {
-            showToast(`${filteredCount}개의 이전 사진이 제외되었습니다`, 'info');
-        }
     } catch (error) {
         hideLoading();
         console.error('File processing error:', error);
