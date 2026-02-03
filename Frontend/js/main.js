@@ -424,21 +424,41 @@ const elements = {
 // ============================================
 // Utility Functions
 // ============================================
+// Helper: Check if date string already has timezone info
+function hasTimezoneInfo(dateString) {
+    // Matches: Z, +00:00, -05:00, +0900, etc.
+    return /Z$|[+-]\d{2}:?\d{2}$/.test(dateString);
+}
+
 function formatDate(dateString) {
-    const date = new Date(dateString);
+    if (!dateString) return '';
+    // Supabase returns timestamps without timezone suffix, so we need to add 'Z' for proper UTC parsing
+    // But some fields (like created_at) may already have timezone info
+    const normalizedDateString = hasTimezoneInfo(dateString) ? dateString : dateString + 'Z';
+    const date = new Date(normalizedDateString);
+    if (isNaN(date.getTime())) return ''; // Invalid date fallback
     const options = { year: 'numeric', month: 'long', day: 'numeric' };
     return date.toLocaleDateString('ko-KR', options);
 }
 
 function formatDateTime(dateString) {
-    const date = new Date(dateString);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
+    if (!dateString) return '';
+    // Supabase returns timestamps without timezone suffix, so we need to add 'Z' for proper UTC parsing
+    // But some fields may already have timezone info
+    const normalizedDateString = hasTimezoneInfo(dateString) ? dateString : dateString + 'Z';
+    const date = new Date(normalizedDateString);
+    if (isNaN(date.getTime())) return ''; // Invalid date fallback
 
-    return `${year}-${month}-${day} ${hours}:${minutes}`;
+    // Format: "2024년 1월 20일 오후 2:30"
+    const options = {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+    };
+    return date.toLocaleString('ko-KR', options);
 }
 
 function getInitials(name) {

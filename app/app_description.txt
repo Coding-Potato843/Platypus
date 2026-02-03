@@ -484,7 +484,7 @@ After build completes, download the APK from Expo dashboard and install on devic
 5. **No Registration**: Users must register on web first, then login via app
 6. **Duplicate Detection**: Requires development build (expo-crypto native module). Expo Go will throw "Cannot find native module 'ExpoCrypto'" error
 7. **file_hash Column**: Must be added to photos table before using duplicate detection feature
-8. **Date Format Difference**: Web shows exact datetime (`YYYY-MM-DD HH:mm`) for last scan, mobile shows relative time
+8. **Date Format Difference**: Web shows Korean datetime format (`YYYY년 M월 D일 오전/오후 H:MM`) for last scan, mobile shows localized datetime
 9. **Web vs Mobile Date Filtering**: Web has no client-side date filtering (hash-only), mobile uses `last_sync_at` for "Gallery Scan" tab only
 10. **Tab-Based last_sync_at Update**: Only "Gallery Scan" tab updates `last_sync_at` on upload; "Select from Gallery" tab does NOT update it (intentional - allows uploading old photos without affecting the scan date)
 

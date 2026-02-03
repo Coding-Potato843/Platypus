@@ -380,10 +380,11 @@ confirmDeleteAccount() → handleDeleteAccount() → deleteAccount() (auth.js)
 - Last scan date tracking and filtering
 - **Duplicate detection** - SHA-256 hash-based duplicate photo prevention (web & mobile)
 - **Gallery sorting** - Sort by date_taken or created_at, ascending or descending (two dropdowns)
-- **Exact datetime display** - Last scan date shows exact `YYYY-MM-DD HH:mm` format instead of relative time ("today", "yesterday")
+- **Korean datetime display** - Last scan date shows Korean format `YYYY년 M월 D일 오전/오후 H:MM` (e.g., "2024년 1월 20일 오후 2:30")
 - **Photo re-upload fix** - Removed client-side date filtering; deleted photos can be re-uploaded without browser refresh
 - **Upload date in detail modal** - Photo detail modal shows upload date (`created_at`) in "YYYY년 M월 D일" format below taken date
 - **last_sync_at mobile-only** - Web photo import no longer updates `last_sync_at`; only mobile app gallery scan updates the last scan timestamp
+- **Timezone handling fix** - Web date functions properly handle Supabase timestamps with/without timezone info (Z, +00:00, etc.)
 
 ### Required Setup
 Run these in **Supabase SQL Editor** before using the app:
@@ -469,7 +470,7 @@ The app uses Korean UI text. Key terminology:
 |---------|-------------|-------|
 | Import Photos | 사진 불러오기 | Main button to import photos |
 | Select Photo Files | 사진 파일 선택 | File picker button |
-| Last Scan | 마지막 스캔 | Exact datetime format: `YYYY-MM-DD HH:mm` (e.g., "2024-01-20 14:30") |
+| Last Scan | 마지막 스캔 | Korean datetime format: `YYYY년 M월 D일 오전/오후 H:MM` (e.g., "2024년 1월 20일 오후 2:30") |
 | Gallery Scan | 갤러리 스캔 | Auto-scan photos after last scan date |
 | Select from Gallery | 갤러리에서 선택 | Manual photo picker |
 | Scan Complete | 스캔 완료 | Alert title after scanning |
