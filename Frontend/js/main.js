@@ -23,7 +23,6 @@ import {
     searchUsers,
     getUserStats,
     updateUserProfile,
-    updateLastSync,
     ApiError,
     calculateFileHash,
     checkDuplicateHashes
@@ -1442,16 +1441,7 @@ async function importSelectedPhotos() {
     // Upload with duplicate detection
     const { uploaded, errors, skipped } = await uploadPhotos(user.id, selectedFiles, updateProgress);
 
-    // Update last sync time
-    try {
-        await updateLastSync(user.id);
-        state.lastSyncDate = new Date().toISOString();
-
-        // Update UI
-        elements.lastSync.textContent = `마지막 스캔: ${formatDateTime(state.lastSyncDate)}`;
-    } catch (error) {
-        console.error('Failed to update last sync:', error);
-    }
+    // Note: last_sync_at is only updated by mobile app gallery scan, not web import
 
     // Clean up preview URLs
     state.syncFiles.forEach(photo => {
