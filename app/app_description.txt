@@ -558,6 +558,7 @@ npx serve dist
 - ✅ **Downloaded Image Support** - Proper date handling using modificationTime
 - ✅ **Duplicate Detection** - SHA-256 hash-based duplicate photo prevention
 - ✅ **GPS Location Fix** - Uses `assetInfo.location` (standard) with EXIF fallback for proper location extraction
+- ✅ **Double Back to Exit** - Press back twice within 2 seconds to exit app (Android only, with toast notification)
 
 ### Notes
 - **Development build required**: Expo Go has limitations with media library access and lacks expo-crypto native module
@@ -589,3 +590,4 @@ npx serve dist
 - [x] **Permission Modal** - First-launch only permission request (persisted via AsyncStorage), step-by-step guide, "알겠습니다" dismiss button
 - [x] **Duplicate Detection** - SHA-256 hash-based duplicate photo prevention (uses expo-crypto)
 - [x] **GPS Location Fix** - Fixed GPS coordinate extraction to use `assetInfo.location` (expo-media-library standard format) with EXIF fallback
+- [x] **Double Back to Exit** - Press back button twice within 2 seconds to exit app (Android only, toast notification on first press)

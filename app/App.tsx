@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, BackHandler, ToastAndroid, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAuth } from './src/hooks/useAuth';
 import { LoginScreen } from './src/screens/LoginScreen';
@@ -13,6 +13,29 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 function AppContent() {
   const { user, loading } = useAuth();
+  const lastBackPressed = useRef<number>(0);
+
+  // Handle back button press - exit app on double press
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      const now = Date.now();
+
+      if (now - lastBackPressed.current < 2000) {
+        // Second press within 2 seconds - exit app
+        BackHandler.exitApp();
+        return true;
+      }
+
+      // First press - show toast and record time
+      lastBackPressed.current = now;
+      ToastAndroid.show('한번 더 누르면 종료됩니다', ToastAndroid.SHORT);
+      return true;
+    });
+
+    return () => backHandler.remove();
+  }, []);
 
   // Show loading screen while checking auth
   if (loading) {
