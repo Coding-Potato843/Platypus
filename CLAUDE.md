@@ -26,8 +26,8 @@ Photo sharing web app with photo import, group organization, friend sharing, and
 - **Sorting**: Two dropdown selectors for sort field and order
   - Sort Field: 촬영 시간 (`date_taken`) / 업로드 시간 (`created_at`)
   - Sort Order: 최신순 (`desc`) / 오래된순 (`asc`)
-- **Detail Modal**: Metadata, group assignment, download, delete
-- **Data Model**: `{ id, url, date, location, groupIds[], author? }`
+- **Detail Modal**: Metadata (taken date, upload date, location), group assignment, download, delete
+- **Data Model**: `{ id, url, date, created_at, location, groupIds[], author? }`
 
 ### 3. Groups
 - CRUD operations (no default groups - users create their own)
@@ -228,7 +228,10 @@ openSyncModal()              // Open photo import modal
 handleFileSelect(event)      // Handle file selection, extract EXIF data
 renderSyncPreview()          // Render photo preview gallery
 processReverseGeocoding()    // Convert GPS coordinates to location names (background)
-importSelectedPhotos()       // Upload selected photos to Supabase
+importSelectedPhotos()       // Upload selected photos to Supabase (does NOT update last_sync_at)
+
+// Photo Detail Modal
+openPhotoModal(photoId)      // Open photo detail modal with taken date, upload date, location
 
 // Account Deletion
 confirmDeleteAccount()   // Show confirmation modal
@@ -303,10 +306,10 @@ Mobile-first photo upload workflow:
        ↓
 6. User clicks [Import] → Hash-based duplicate check → Upload to Supabase Storage
        ↓
-7. Update last_sync_at timestamp → Refresh gallery
+7. Refresh gallery (last_sync_at is NOT updated - only mobile app updates it)
 ```
 
-**Note:** Client-side date filtering was removed. Duplicate detection is now handled server-side via SHA-256 file hash comparison. This allows re-uploading previously deleted photos without browser refresh.
+**Note:** Web import does NOT update `last_sync_at`. Only mobile app gallery scan updates the last scan timestamp. Client-side date filtering was removed. Duplicate detection is now handled server-side via SHA-256 file hash comparison. This allows re-uploading previously deleted photos without browser refresh.
 
 **EXIF Extraction:**
 - Date: `DateTimeOriginal` > `DateTime` > file's `lastModified`
@@ -379,6 +382,8 @@ confirmDeleteAccount() → handleDeleteAccount() → deleteAccount() (auth.js)
 - **Gallery sorting** - Sort by date_taken or created_at, ascending or descending (two dropdowns)
 - **Exact datetime display** - Last scan date shows exact `YYYY-MM-DD HH:mm` format instead of relative time ("today", "yesterday")
 - **Photo re-upload fix** - Removed client-side date filtering; deleted photos can be re-uploaded without browser refresh
+- **Upload date in detail modal** - Photo detail modal shows upload date (`created_at`) in "YYYY년 M월 D일" format below taken date
+- **last_sync_at mobile-only** - Web photo import no longer updates `last_sync_at`; only mobile app gallery scan updates the last scan timestamp
 
 ### Required Setup
 Run these in **Supabase SQL Editor** before using the app:
@@ -475,6 +480,7 @@ The app uses Korean UI text. Key terminology:
 | Sort | 정렬 | Sort dropdown label |
 | Taken Time | 촬영 시간 | Sort by date_taken (photo capture/download time) |
 | Upload Time | 업로드 시간 | Sort by created_at (upload timestamp) |
+| Upload | 업로드 | Upload date in photo detail modal (format: "YYYY년 M월 D일") |
 | Newest First | 최신순 | Descending order |
 | Oldest First | 오래된순 | Ascending order |
 
@@ -572,6 +578,7 @@ APK is downloaded from Expo dashboard after build completes.
 - ✅ **All Albums Scan** - Includes Downloads, Telegram, WhatsApp, KakaoTalk folders
 - ✅ **Downloaded Image Support** - Uses modificationTime for proper date handling
 - ✅ **Duplicate Detection** - SHA-256 hash-based duplicate prevention (requires development build for expo-crypto)
+- ✅ **GPS Location Fix** - Uses `assetInfo.location` (standard format) with EXIF fallback
 - ❌ Background upload not planned (manual import only)
 
 ### Gallery Picker Feature
@@ -616,6 +623,14 @@ Date priority when uploading photos:
 4. **Current time** - Fallback if all timestamps invalid
 
 This fixes the "1970-01-01" bug for downloaded images that lack EXIF data.
+
+### GPS Location Extraction
+expo-media-library returns GPS coordinates in two formats. The app checks both:
+
+1. **Primary**: `assetInfo.location.latitude` / `assetInfo.location.longitude` (expo-media-library standard format)
+2. **Fallback**: `assetInfo.exif.GPSLatitude` / `assetInfo.exif.GPSLongitude` (raw EXIF data)
+
+This ensures location data is properly extracted and saved to the database for reverse geocoding.
 
 ### Duplicate Detection
 

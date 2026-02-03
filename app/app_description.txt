@@ -95,7 +95,7 @@ app/
 6. User taps to DESELECT unwanted photos
 7. User taps "업로드" button
 8. Photos uploaded to Supabase Storage + Database
-9. `last_sync_at` (last scan date) updated in user profile
+9. `last_sync_at` (last scan date) updated in user profile (ONLY mobile app updates this, web import does NOT)
 
 #### Method 2: "갤러리에서 선택" (Manual Picker)
 1. User taps "갤러리에서 선택" button
@@ -188,14 +188,24 @@ Priority order: EXIF DateTimeOriginal > modificationTime > creationTime > curren
    - Batch query to check multiple hashes at once
    - Returns Set of existing hashes
 
-### 6. Reverse Geocoding (services/geocoding.ts)
+### 6. GPS Location Extraction (services/photos.ts)
+
+expo-media-library returns GPS coordinates in two different formats depending on the device/OS version. The `assetToPhotoAsset` function handles both:
+
+**GPS Coordinate Sources (in priority order):**
+1. **`assetInfo.location`** - expo-media-library standard format (`{ latitude, longitude }`)
+2. **`assetInfo.exif.GPSLatitude/GPSLongitude`** - Raw EXIF data (fallback)
+
+This ensures location data is properly extracted regardless of how the device provides GPS metadata.
+
+### 7. Reverse Geocoding (services/geocoding.ts)
 - Uses OpenStreetMap Nominatim API (free, no API key)
 - Rate limited: 1 request per second
 - Converts GPS coordinates → location name
 - Example: (37.5665, 126.9780) → "서울특별시, 중구"
 - Results cached to reduce API calls
 
-### 7. Duplicate Detection (services/photos.ts)
+### 8. Duplicate Detection (services/photos.ts)
 
 SHA-256 hash-based duplicate photo prevention.
 
@@ -419,6 +429,12 @@ After build completes, download the APK from Expo dashboard and install on devic
 3. **Upload**: Upload the downloaded image
 4. **Verify Date**: Check on web that date is download time (NOT 1970-01-01)
 
+### Location Data (GPS)
+1. **Photo with GPS**: Take or select a photo with GPS metadata
+2. **Upload**: Upload the photo via mobile app
+3. **Verify on Web**: Check that location is displayed in photo detail modal (NOT null)
+4. **Database Check**: Verify `location` column in photos table is populated
+
 ### Duplicate Detection
 1. **First Upload**: Upload a set of photos
 2. **Verify Hashes**: Check database that file_hash column is populated
@@ -433,13 +449,14 @@ After build completes, download the APK from Expo dashboard and install on devic
 
 1. **Same Supabase Database**: Photos uploaded from this app appear on web gallery
 2. **RLS Enabled**: Users can only access their own data
-3. **last_sync_at**: Critical for incremental import - only imports photos newer than this timestamp (last scan date)
+3. **last_sync_at**: Critical for incremental import - only imports photos newer than this timestamp (last scan date). **ONLY mobile app updates this field**; web photo import does NOT update `last_sync_at`
 4. **Storage Path**: `{userId}/{timestamp}_{random}.{ext}` (same pattern as web)
 5. **No Registration**: Users must register on web first, then login via app
 6. **Duplicate Detection**: Requires development build (expo-crypto native module). Expo Go will throw "Cannot find native module 'ExpoCrypto'" error
 7. **file_hash Column**: Must be added to photos table before using duplicate detection feature
-8. **Date Format Difference**: Web shows exact datetime (`YYYY-MM-DD HH:mm`), mobile shows relative time for last scan
+8. **Date Format Difference**: Web shows exact datetime (`YYYY-MM-DD HH:mm`) for last scan, mobile shows relative time
 9. **Web vs Mobile Date Filtering**: Web has no client-side date filtering (hash-only), mobile still uses `last_sync_at` for auto-scan
+10. **last_sync_at Update**: ONLY mobile app updates `last_sync_at` on gallery scan; web photo import does NOT update this field
 
 ---
 
@@ -540,6 +557,7 @@ npx serve dist
 - ✅ **All Albums Scan** - Includes Downloads, Telegram, WhatsApp, KakaoTalk
 - ✅ **Downloaded Image Support** - Proper date handling using modificationTime
 - ✅ **Duplicate Detection** - SHA-256 hash-based duplicate photo prevention
+- ✅ **GPS Location Fix** - Uses `assetInfo.location` (standard) with EXIF fallback for proper location extraction
 
 ### Notes
 - **Development build required**: Expo Go has limitations with media library access and lacks expo-crypto native module
@@ -570,3 +588,4 @@ npx serve dist
 - [x] **UI Cleanup** - Removed camera icon, filter icon; streamlined date picker buttons
 - [x] **Permission Modal** - First-launch only permission request (persisted via AsyncStorage), step-by-step guide, "알겠습니다" dismiss button
 - [x] **Duplicate Detection** - SHA-256 hash-based duplicate photo prevention (uses expo-crypto)
+- [x] **GPS Location Fix** - Fixed GPS coordinate extraction to use `assetInfo.location` (expo-media-library standard format) with EXIF fallback
