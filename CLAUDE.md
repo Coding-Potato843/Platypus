@@ -592,6 +592,7 @@ APK is downloaded from Expo dashboard after build completes.
 - ✅ **Duplicate Detection** - SHA-256 hash-based duplicate prevention (requires development build for expo-crypto)
 - ✅ **GPS Location Fix** - Uses `assetInfo.location` (standard format) with EXIF fallback
 - ✅ **Selective last_sync_at Update** - Only "Gallery Scan" tab updates last scan date; "Select from Gallery" does not
+- ✅ **Custom Alert/Toast UI** - Dark theme custom alert modals and toast notifications (replaces system Alert.alert)
 - ❌ Background upload not planned (manual import only)
 
 ### Tab-Based Import UI
@@ -642,6 +643,61 @@ The mobile app uses a tab-based UI to clearly separate two import methods, each 
 - Year/month scroll lists for direct selection
 - Cancel button (red, left) / Confirm button (sky blue, right) at bottom
 - No native modules required (works in Expo Go)
+
+### Custom Alert & Toast (Mobile App)
+
+Custom UI components that replace React Native's default `Alert.alert()` to match the app's dark theme.
+
+**Why Custom Alert:**
+- React Native's default Alert uses system styling (white background, black text)
+- Does not match the app's dark theme (slate backgrounds, cyan accents)
+- Custom components provide consistent visual experience
+
+**Components (CustomAlert.tsx):**
+
+| Component | Purpose | Auto-dismiss |
+|-----------|---------|--------------|
+| `CustomAlert` | Confirmation dialogs, error messages | No (requires button tap) |
+| `Toast` | Success notifications (upload complete) | Yes (2.5 seconds) |
+
+**CustomAlert Features:**
+- Dark theme styling (`#1e293b` background, `#f1f5f9` text)
+- Button styles: default (cyan), cancel (gray), destructive (red)
+- Button order: action button on top, cancel button at bottom
+- Fade animation on open/close
+
+**Toast Features:**
+- Appears at bottom of screen
+- Auto-dismisses after 2.5 seconds
+- Slide-up animation with fade
+- Cyan border with checkmark icon
+- Used for upload success messages
+
+**Usage (Hooks):**
+```typescript
+// CustomAlert
+const { showAlert, AlertComponent } = useCustomAlert();
+showAlert('Title', 'Message', [
+  { text: 'Cancel', style: 'cancel' },
+  { text: 'Confirm', onPress: handleConfirm },
+]);
+
+// Toast
+const { showToast, ToastComponent } = useToast();
+showToast('3장 업로드 완료');
+
+// In JSX (must render components)
+<AlertComponent />
+<ToastComponent />
+```
+
+**Button Order in Dialogs:**
+- Action button (Upload, Logout, OK) → **Top**
+- Cancel button → **Bottom**
+
+**Where Used:**
+- `SyncScreen.tsx` - Upload confirmation, scan complete, errors, logout
+- `LoginScreen.tsx` - Login errors, validation messages
 
 ### All Albums Scanning
 Both auto-scan and gallery picker scan ALL albums including special folders:

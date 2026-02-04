@@ -7,11 +7,11 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { LoadingOverlay } from '../components/LoadingOverlay';
+import { useCustomAlert } from '../components/CustomAlert';
 import { useAuth } from '../hooks/useAuth';
 
 type LoginScreenProps = {
@@ -23,14 +23,15 @@ export function LoginScreen({ navigation }: LoginScreenProps) {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
+  const { showAlert, AlertComponent } = useCustomAlert();
 
   const handleLogin = async () => {
     if (!email.trim()) {
-      Alert.alert('오류', '이메일을 입력해주세요.');
+      showAlert('오류', '이메일을 입력해주세요.');
       return;
     }
     if (!password) {
-      Alert.alert('오류', '비밀번호를 입력해주세요.');
+      showAlert('오류', '비밀번호를 입력해주세요.');
       return;
     }
 
@@ -41,7 +42,7 @@ export function LoginScreen({ navigation }: LoginScreenProps) {
       // Navigation is handled by auth state change in App.tsx
     } catch (error) {
       const message = error instanceof Error ? error.message : '로그인에 실패했습니다.';
-      Alert.alert('로그인 실패', message);
+      showAlert('로그인 실패', message);
     } finally {
       setIsLoading(false);
     }
@@ -100,6 +101,9 @@ export function LoginScreen({ navigation }: LoginScreenProps) {
           웹에서 회원가입 후 로그인하세요
         </Text>
       </View>
+
+      {/* Custom Alert Modal */}
+      <AlertComponent />
     </KeyboardAvoidingView>
   );
 }

@@ -52,7 +52,8 @@ app/
 │   │   ├── GalleryPickerModal.tsx  # Gallery picker with filtering
 │   │   ├── DateRangePicker.tsx     # Year/month date picker
 │   │   ├── FilterBar.tsx           # Collapsible filter UI
-│   │   └── PermissionModal.tsx     # Gallery permission request modal
+│   │   ├── PermissionModal.tsx     # Gallery permission request modal
+│   │   └── CustomAlert.tsx     # Dark theme alert modal & toast (replaces Alert.alert)
 │   └── screens/
 │       ├── LoginScreen.tsx     # Email/password login form
 │       └── SyncScreen.tsx      # Main sync UI (scan, gallery picker, upload)
@@ -270,6 +271,65 @@ onProgress(current: number, total: number, status: 'hashing' | 'uploading')
 - Hash calculation: ~100-200ms per 5MB photo
 - Batch query: ~50-100ms for 100 hashes
 - Total overhead: ~2-3 seconds for 100 photos
+
+### 9. Custom Alert & Toast (components/CustomAlert.tsx)
+
+Custom UI components replacing React Native's default `Alert.alert()` to match the app's dark theme.
+
+**Why Custom:**
+- Default Alert uses system styling (white background) that doesn't match dark theme
+- Custom components provide consistent visual experience across the app
+
+**Components:**
+
+| Component | Purpose | Auto-dismiss |
+|-----------|---------|--------------|
+| `CustomAlert` | Confirmation dialogs, error messages | No (button tap required) |
+| `Toast` | Success notifications | Yes (2.5 seconds) |
+
+**CustomAlert Styling:**
+- Background: `#1e293b` (slate-800)
+- Text: `#f1f5f9` (slate-100)
+- Default button: `#06b6d4` (cyan) background
+- Cancel button: `#334155` (gray) background
+- Destructive button: `#ef4444` (red) background
+- Button order: action button on TOP, cancel button on BOTTOM
+
+**Toast Styling:**
+- Position: Bottom of screen (100px from bottom)
+- Background: `#1e293b` with `#06b6d4` border
+- Checkmark icon + message text
+- Slide-up animation with fade
+- Auto-dismiss after 2.5 seconds
+
+**Usage:**
+```typescript
+// In component
+const { showAlert, AlertComponent } = useCustomAlert();
+const { showToast, ToastComponent } = useToast();
+
+// Show alert with buttons
+showAlert('사진 업로드', '3장의 사진을 업로드하시겠습니까?', [
+  { text: '취소', style: 'cancel' },
+  { text: '업로드', onPress: handleUpload },
+]);
+
+// Show toast (auto-dismiss)
+showToast('3장 업로드 완료');
+
+// Must render in JSX
+return (
+  <>
+    {/* ... other content ... */}
+    <AlertComponent />
+    <ToastComponent />
+  </>
+);
+```
+
+**Where Used:**
+- `SyncScreen.tsx`: Upload confirmation, scan complete, upload success (toast), errors, logout
+- `LoginScreen.tsx`: Login errors, validation messages
 
 ---
 
@@ -619,6 +679,7 @@ npx serve dist
 - ✅ **Duplicate Detection** - SHA-256 hash-based duplicate photo prevention
 - ✅ **GPS Location Fix** - Uses `assetInfo.location` (standard) with EXIF fallback for proper location extraction
 - ✅ **Double Back to Exit** - Press back twice within 2 seconds to exit app (Android only, with toast notification)
+- ✅ **Custom Alert/Toast UI** - Dark theme alert modals and toast notifications replacing system Alert.alert
 
 ### Notes
 - **Development build required**: Expo Go has limitations with media library access and lacks expo-crypto native module
@@ -655,3 +716,4 @@ npx serve dist
 - [x] **Double Back to Exit** - Press back button twice within 2 seconds to exit app (Android only, toast notification on first press)
 - [x] **Tab-Based UI** - Separated "Gallery Scan" and "Select from Gallery" into distinct tabs with independent photo lists
 - [x] **Selective last_sync_at Update** - "Gallery Scan" tab updates last scan date on upload; "Select from Gallery" tab does not
+- [x] **Custom Alert/Toast UI** - Dark theme custom alert modals replacing system Alert.alert; toast notifications for upload success (auto-dismiss after 2.5s); button order: action on top, cancel on bottom

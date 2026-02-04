@@ -4,7 +4,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,6 +14,7 @@ import { PhotoGrid } from '../components/PhotoGrid';
 import { LoadingOverlay } from '../components/LoadingOverlay';
 import { GalleryPickerModal } from '../components/GalleryPickerModal';
 import { PermissionModal } from '../components/PermissionModal';
+import { useCustomAlert, useToast } from '../components/CustomAlert';
 import * as MediaLibrary from 'expo-media-library';
 import {
   fetchPhotosAfterDate,
@@ -30,6 +30,8 @@ type TabType = 'scan' | 'picker';
 
 export function SyncScreen({ navigation }: SyncScreenProps) {
   const { user, profile, logout, refreshProfile } = useAuth();
+  const { showAlert, AlertComponent } = useCustomAlert();
+  const { showToast, ToastComponent } = useToast();
 
   // 현재 활성 탭
   const [activeTab, setActiveTab] = useState<TabType>('scan');
@@ -83,8 +85,8 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
   // Scan gallery for new photos
   const handleScanGallery = useCallback(async () => {
     if (!hasPermission) {
-      // First try system permission request
-      const { status } = await MediaLibrary.requestPermissionsAsync();
+      // First try system permission request (photo only, no video/audio)
+      const { status } = await MediaLibrary.requestPermissionsAsync(false, ['photo']);
       if (status === 'granted') {
         setHasPermission(true);
         // Continue to scan below
@@ -103,7 +105,7 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
       setScanPhotos(scannedPhotos);
 
       if (scannedPhotos.length === 0) {
-        Alert.alert(
+        showAlert(
           '스캔 완료',
           lastSyncDate
             ? '새로운 사진이 없습니다.'
@@ -112,11 +114,11 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
       }
     } catch (error) {
       console.error('Scan error:', error);
-      Alert.alert('오류', '갤러리 스캔 중 오류가 발생했습니다.');
+      showAlert('오류', '갤러리 스캔 중 오류가 발생했습니다.');
     } finally {
       setIsScanning(false);
     }
-  }, [hasPermission, lastSyncDate]);
+  }, [hasPermission, lastSyncDate, showAlert]);
 
   // Toggle photo selection
   const handleToggleSelect = useCallback((id: string) => {
@@ -139,89 +141,84 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
   const handleUpload = useCallback(async () => {
     const selectedPhotos = currentPhotos.filter(p => p.selected);
     if (selectedPhotos.length === 0) {
-      Alert.alert('알림', '업로드할 사진을 선택해주세요.');
+      showAlert('알림', '업로드할 사진을 선택해주세요.');
       return;
     }
 
     if (!user) {
-      Alert.alert('오류', '로그인이 필요합니다.');
+      showAlert('오류', '로그인이 필요합니다.');
       return;
     }
 
-    Alert.alert(
+    const performUpload = async () => {
+      setIsUploading(true);
+      setUploadProgress({ current: 0, total: selectedPhotos.length });
+
+      try {
+        const result = await uploadPhotos(
+          user.id,
+          selectedPhotos,
+          (current, total, status) => {
+            setUploadProgress({ current, total });
+            if (status === 'hashing') {
+              setLoadingMessage(`중복 검사 중... ${current}/${total}`);
+            } else {
+              setLoadingMessage(`업로드 중... ${current}/${total}`);
+            }
+          }
+        );
+
+        // 갤러리 스캔 탭에서만 마지막 스캔 날짜 업데이트
+        if (activeTab === 'scan') {
+          await updateLastSync(user.id);
+          await refreshProfile();
+        }
+
+        // Clear uploaded photos from list
+        setCurrentPhotos(prev => prev.filter(p => !p.selected));
+
+        // Build result message for toast
+        let resultMessage = `${result.success}장 업로드 완료`;
+        if (result.skipped > 0) {
+          resultMessage += `, ${result.skipped}장 중복 제외`;
+        }
+        if (result.failed > 0) {
+          resultMessage += `, ${result.failed}장 실패`;
+        }
+
+        showToast(resultMessage);
+      } catch (error) {
+        console.error('Upload error:', error);
+        showAlert('오류', '업로드 중 오류가 발생했습니다.');
+      } finally {
+        setIsUploading(false);
+        setUploadProgress({ current: 0, total: 0 });
+      }
+    };
+
+    showAlert(
       '사진 업로드',
       `${selectedPhotos.length}장의 사진을 업로드하시겠습니까?`,
       [
         { text: '취소', style: 'cancel' },
-        {
-          text: '업로드',
-          onPress: async () => {
-            setIsUploading(true);
-            setUploadProgress({ current: 0, total: selectedPhotos.length });
-
-            try {
-              const result = await uploadPhotos(
-                user.id,
-                selectedPhotos,
-                (current, total, status) => {
-                  setUploadProgress({ current, total });
-                  if (status === 'hashing') {
-                    setLoadingMessage(`중복 검사 중... ${current}/${total}`);
-                  } else {
-                    setLoadingMessage(`업로드 중... ${current}/${total}`);
-                  }
-                }
-              );
-
-              // 갤러리 스캔 탭에서만 마지막 스캔 날짜 업데이트
-              if (activeTab === 'scan') {
-                await updateLastSync(user.id);
-                await refreshProfile();
-              }
-
-              // Clear uploaded photos from list
-              setCurrentPhotos(prev => prev.filter(p => !p.selected));
-
-              // Build result message
-              let resultMessage = `${result.success}장 성공`;
-              if (result.skipped > 0) {
-                resultMessage += `, ${result.skipped}장 중복 제외`;
-              }
-              if (result.failed > 0) {
-                resultMessage += `, ${result.failed}장 실패`;
-              }
-
-              Alert.alert('업로드 완료', resultMessage);
-            } catch (error) {
-              console.error('Upload error:', error);
-              Alert.alert('오류', '업로드 중 오류가 발생했습니다.');
-            } finally {
-              setIsUploading(false);
-              setUploadProgress({ current: 0, total: 0 });
-            }
-          },
-        },
+        { text: '업로드', onPress: performUpload },
       ]
     );
-  }, [currentPhotos, user, refreshProfile, activeTab, setCurrentPhotos]);
+  }, [currentPhotos, user, refreshProfile, activeTab, setCurrentPhotos, showAlert, showToast]);
 
   // Handle logout
   const handleLogout = useCallback(() => {
-    Alert.alert('로그아웃', '로그아웃 하시겠습니까?', [
+    showAlert('로그아웃', '로그아웃 하시겠습니까?', [
       { text: '취소', style: 'cancel' },
-      {
-        text: '로그아웃',
-        style: 'destructive',
-        onPress: logout,
-      },
+      { text: '로그아웃', style: 'destructive', onPress: logout },
     ]);
-  }, [logout]);
+  }, [logout, showAlert]);
 
   // Handle gallery picker open
   const handleOpenGalleryPicker = useCallback(async () => {
     if (!hasPermission) {
-      // First try system permission request
-      const { status } = await MediaLibrary.requestPermissionsAsync();
+      // First try system permission request (photo only, no video/audio)
+      const { status } = await MediaLibrary.requestPermissionsAsync(false, ['photo']);
       if (status === 'granted') {
         setHasPermission(true);
         // Continue to open picker below
@@ -426,6 +423,12 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
           setShowPermissionModal(false);
         }}
       />
+
+      {/* Custom Alert Modal */}
+      <AlertComponent />
+
+      {/* Toast Notification */}
+      <ToastComponent />
     </SafeAreaView>
   );
 }
