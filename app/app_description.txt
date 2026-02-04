@@ -72,21 +72,31 @@ app/
 - Korean UI text
 - Auto-navigation to SyncScreen on successful login
 
-### 2. Permission Request (PermissionModal.tsx)
-- Shows only ONCE on first app launch after installation (persisted via AsyncStorage)
-- Clean UI explaining why permission is needed
-- Step-by-step guide: "1. 권한 → 2. 사진 및 동영상 → 3. 허용"
-- Two buttons:
-  - "설정으로 이동" (primary, cyan) - Opens app settings via `Linking.openSettings()`
-  - "알겠습니다" (secondary, gray text) - Dismisses modal permanently
-- Privacy note reassuring user about data safety
-- Uses AsyncStorage key `permissionModalShown` to prevent showing again
+### 2. Permission Request (PermissionModal.tsx + SyncScreen.tsx)
 
-**Permission Modal Logic (handles reinstall scenario):**
-- Android's Google auto-backup may restore AsyncStorage data on reinstall
-- But permissions are ALWAYS reset on reinstall
-- Fix: If permission status is `undetermined`, ALWAYS show modal (regardless of AsyncStorage)
-- If permission status is `denied`, check AsyncStorage before showing modal
+Permission is requested only when user taps gallery scan/select buttons, not on app launch.
+
+**Permission Request Flow:**
+1. User taps "갤러리 스캔" or "갤러리에서 선택" button
+2. If permission not granted → `MediaLibrary.requestPermissionsAsync()` shows system dialog
+3. If user grants permission → Proceed with gallery operation
+4. If user denies permission → Show custom PermissionModal with settings guide
+5. AppState listener re-checks permission when app returns to foreground
+
+**PermissionModal UI Components:**
+- Title: "갤러리 접근 권한 필요"
+- Description: Explains why permission is needed
+- Step-by-step guide: "1. 권한 → 2. 사진 및 동영상 → 3. 허용"
+- "설정으로 이동" (primary, cyan) - Opens app settings via `Linking.openSettings()`
+- "알겠습니다" (secondary, gray text) - Closes modal
+- Privacy note reassuring user about data safety
+
+**Key Design Decisions:**
+- No automatic modal on app launch (cleaner UX)
+- System permission dialog shown first (standard behavior)
+- Custom modal only after denial (provides settings guidance)
+- No AsyncStorage flags (stateless, simpler logic)
+- AppState listener ensures permission state updates when returning from settings
 
 ### 3. Gallery Import (SyncScreen.tsx)
 
@@ -292,9 +302,16 @@ onProgress(current: number, total: number, status: 'hashing' | 'uploading')
 - `NSPhotoLibraryUsageDescription`: Gallery access for sync
 
 ### Android (app.json)
-- `READ_EXTERNAL_STORAGE`: Legacy storage access
-- `READ_MEDIA_IMAGES`: Android 13+ media access
+Only photo-related permissions are included (video/audio permissions removed):
+- `READ_EXTERNAL_STORAGE`: Legacy storage access (Android < 13)
+- `READ_MEDIA_IMAGES`: Android 13+ photo access
+- `READ_MEDIA_VISUAL_USER_SELECTED`: Android 14+ partial access support
 - `ACCESS_MEDIA_LOCATION`: Required for reading GPS data from photo EXIF
+
+**Removed permissions** (not needed for photo-only app):
+- `WRITE_EXTERNAL_STORAGE`: Not saving photos to device
+- `READ_MEDIA_VIDEO`: Not handling videos
+- `READ_MEDIA_AUDIO`: Not handling audio files
 
 ### expo-media-library Plugin Config
 ```json
@@ -420,15 +437,18 @@ After build completes, download the APK from Expo dashboard and install on devic
 
 ## Testing Checklist
 
-### Permission Modal (First Launch & Reinstall)
+### Permission Request Flow
 1. **Fresh Install**: Uninstall and reinstall app (or clear app data)
-2. **First Launch**: Modal should appear on first launch
-3. **Dismiss**: Tap "알겠습니다" to close modal
-4. **Restart App**: Modal should NOT appear again
-5. **Grant Permission**: Go to Settings manually and grant permission
-6. **Verify**: App should work normally without modal appearing
-7. **Reinstall Test**: Uninstall app completely, then reinstall
-8. **Verify After Reinstall**: Modal should appear again (even if AsyncStorage was backed up by Google)
+2. **First Launch**: No modal should appear automatically
+3. **Tap Scan Button**: Tap "갤러리 스캔" button
+4. **System Dialog**: System permission dialog should appear first
+5. **Grant Permission**: Tap "Allow" in system dialog
+6. **Verify**: Gallery scan should proceed normally
+7. **Deny Permission Test**: Reinstall app, tap scan, deny in system dialog
+8. **Custom Modal**: Custom PermissionModal should appear with settings guide
+9. **Settings Navigation**: Tap "설정으로 이동", grant permission in settings
+10. **Return to App**: Permission should be detected automatically (AppState listener)
+11. **Verify**: Tapping scan button again should work without any modal
 
 ### Tab UI Testing
 1. **Tab Display**: Verify two tabs appear: "갤러리 스캔" and "갤러리에서 선택"
@@ -581,7 +601,7 @@ npx serve dist
 - ✅ Auth state persistence (AsyncStorage)
 - ✅ Navigation between screens
 - ✅ Dark theme UI matching web
-- ✅ **Permission Request Modal** - Shows only once on first launch (persisted via AsyncStorage)
+- ✅ **Permission Request** - System dialog first, custom modal only after denial (stateless approach)
 - ✅ Gallery auto-scan (expo-media-library)
 - ✅ EXIF extraction (date, GPS coordinates)
 - ✅ ACCESS_MEDIA_LOCATION permission for GPS data
@@ -627,8 +647,9 @@ npx serve dist
 - [x] **All Albums Scan** - Downloads, Telegram, WhatsApp, KakaoTalk support
 - [x] **Downloaded Image Date Fix** - Uses modificationTime for proper dating
 - [x] **UI Cleanup** - Removed camera icon, filter icon; streamlined date picker buttons
-- [x] **Permission Modal** - First-launch only permission request (persisted via AsyncStorage), step-by-step guide, "알겠습니다" dismiss button
-- [x] **Permission Modal Reinstall Fix** - Fixed modal not showing after app reinstall due to Google auto-backup restoring AsyncStorage; now checks `undetermined` permission status
+- [x] **Permission Request Simplification** - Removed automatic modal on app launch; now shows system permission dialog first when user taps scan/select button, custom modal only after denial (stateless, no AsyncStorage flags)
+- [x] **AppState Permission Check** - Added AppState listener to re-check permission when app returns to foreground from settings
+- [x] **Android Permission Cleanup** - Removed unnecessary permissions (WRITE_EXTERNAL_STORAGE, READ_MEDIA_VIDEO, READ_MEDIA_AUDIO) for cleaner permission dialog
 - [x] **Duplicate Detection** - SHA-256 hash-based duplicate photo prevention (uses expo-crypto)
 - [x] **GPS Location Fix** - Fixed GPS coordinate extraction to use `assetInfo.location` (expo-media-library standard format) with EXIF fallback
 - [x] **Double Back to Exit** - Press back button twice within 2 seconds to exit app (Android only, toast notification on first press)

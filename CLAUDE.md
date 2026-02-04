@@ -489,28 +489,29 @@ The app uses Korean UI text. Key terminology:
 
 ### Permission Modal (Mobile App)
 
-Shows only ONCE on first app launch after installation. Uses AsyncStorage to persist the "shown" flag.
+Permission request modal that guides users to grant gallery access. Only shown when permission is denied after system dialog.
 
 **UI Components:**
 - Title: "갤러리 접근 권한 필요"
 - Description: Explains why permission is needed
 - Step-by-step guide box: "1. 권한 → 2. 사진 및 동영상 → 3. 허용"
 - "설정으로 이동" button (primary, cyan) - Opens app settings via `Linking.openSettings()`
-- "알겠습니다" button (secondary, gray text) - Dismisses modal permanently
+- "알겠습니다" button (secondary, gray text) - Closes modal
 - Privacy note at bottom
 
-**Behavior:**
-1. First app launch → Check permission status
-2. If `status === 'undetermined'` → Always show modal (fresh install, permission never asked)
-3. If `status === 'denied'` AND `permissionModalShown` not set → Show modal
-4. User clicks "알겠습니다" → Save `permissionModalShown: true` to AsyncStorage, close modal
-5. Modal shows again after app reinstall (because permission resets to 'undetermined')
+**Permission Request Flow:**
+1. User taps "갤러리 스캔" or "갤러리에서 선택" button
+2. If permission not granted → System permission dialog appears first
+3. If user grants permission → Proceed with gallery operation
+4. If user denies permission → Show custom PermissionModal with settings guide
+5. User can tap "설정으로 이동" to open app settings and grant permission manually
+6. AppState listener re-checks permission when app returns to foreground
 
-**Reinstall Handling:**
-- Android's Google auto-backup may restore AsyncStorage data on reinstall
-- But permissions are ALWAYS reset to `undetermined` on reinstall
-- Fix: Check permission status first - if `undetermined`, show modal regardless of AsyncStorage
-- This ensures modal appears after reinstall even if backup restored the `permissionModalShown` flag
+**Key Points:**
+- No automatic modal on app launch (simpler UX)
+- System permission dialog is shown first (standard Android/iOS behavior)
+- Custom modal only appears after user denies system dialog (provides settings guidance)
+- No AsyncStorage flags needed (stateless approach)
 
 ---
 

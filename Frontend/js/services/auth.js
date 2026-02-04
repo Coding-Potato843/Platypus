@@ -10,6 +10,7 @@ let currentUser = null;
 
 /**
  * Initialize auth - check for existing session
+ * Handles invalid refresh token by clearing corrupted session
  */
 export async function initAuth() {
     try {
@@ -17,6 +18,14 @@ export async function initAuth() {
 
         if (error) {
             console.error('Session error:', error);
+
+            // Handle invalid refresh token - clear corrupted session and force re-login
+            if (error.message?.includes('Refresh Token Not Found') ||
+                error.message?.includes('Invalid Refresh Token')) {
+                console.log('Invalid refresh token detected, signing out...');
+                await supabase.auth.signOut();
+            }
+
             return false;
         }
 

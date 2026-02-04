@@ -5,8 +5,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  AppState,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList, PhotoAsset } from '../types';
@@ -17,7 +17,6 @@ import { GalleryPickerModal } from '../components/GalleryPickerModal';
 import { PermissionModal } from '../components/PermissionModal';
 import * as MediaLibrary from 'expo-media-library';
 import {
-  requestMediaLibraryPermission,
   fetchPhotosAfterDate,
   uploadPhotos,
 } from '../services/photos';
@@ -61,40 +60,39 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
   // 이미 추가된 사진 ID Set (갤러리 피커에서 중복 방지용)
   const existingPhotoIds = useMemo(() => new Set(pickerPhotos.map(p => p.id)), [pickerPhotos]);
 
-  // Check permission on mount and show modal only on first launch
+  // Check permission on mount and when app returns to foreground
   useEffect(() => {
-    (async () => {
+    const checkPermission = async () => {
       const { status } = await MediaLibrary.getPermissionsAsync();
-      if (status === 'granted') {
-        setHasPermission(true);
-      } else {
-        setHasPermission(false);
-        // Show modal if:
-        // 1. Permission is 'undetermined' (never asked) - this is a fresh install
-        // 2. OR permission is denied but modal was never shown (handles edge cases)
-        // Note: 'undetermined' check is needed because AsyncStorage may be restored
-        // from Google auto-backup on reinstall, but permissions are always reset
-        if (status === 'undetermined') {
-          setShowPermissionModal(true);
-        } else {
-          const hasSeenModal = await AsyncStorage.getItem('permissionModalShown');
-          if (!hasSeenModal) {
-            setShowPermissionModal(true);
-          }
-        }
+      setHasPermission(status === 'granted');
+    };
+
+    // Check on mount
+    checkPermission();
+
+    // Check when app returns to foreground (after user grants permission in settings)
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        checkPermission();
       }
-    })();
+    });
+
+    return () => subscription.remove();
   }, []);
 
   // Scan gallery for new photos
   const handleScanGallery = useCallback(async () => {
     if (!hasPermission) {
-      const granted = await requestMediaLibraryPermission();
-      if (!granted) {
-        Alert.alert('권한 필요', '갤러리 접근 권한이 필요합니다.');
+      // First try system permission request
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status === 'granted') {
+        setHasPermission(true);
+        // Continue to scan below
+      } else {
+        // If denied, show custom modal with settings guide
+        setShowPermissionModal(true);
         return;
       }
-      setHasPermission(true);
     }
 
     setIsScanning(true);
@@ -222,12 +220,16 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
   // Handle gallery picker open
   const handleOpenGalleryPicker = useCallback(async () => {
     if (!hasPermission) {
-      const granted = await requestMediaLibraryPermission();
-      if (!granted) {
-        Alert.alert('권한 필요', '갤러리 접근 권한이 필요합니다.');
+      // First try system permission request
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status === 'granted') {
+        setHasPermission(true);
+        // Continue to open picker below
+      } else {
+        // If denied, show custom modal with settings guide
+        setShowPermissionModal(true);
         return;
       }
-      setHasPermission(true);
     }
     setIsGalleryPickerVisible(true);
   }, [hasPermission]);
@@ -416,9 +418,7 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
       <PermissionModal
         visible={showPermissionModal}
         onClose={async () => {
-          // Mark as shown so it never appears again
-          await AsyncStorage.setItem('permissionModalShown', 'true');
-          // Re-check permission
+          // Re-check permission after user returns from settings
           const { status } = await MediaLibrary.getPermissionsAsync();
           if (status === 'granted') {
             setHasPermission(true);

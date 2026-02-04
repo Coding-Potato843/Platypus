@@ -67,7 +67,8 @@ export function useAuth(): UseAuthReturn {
       if (event === 'SIGNED_IN' && session?.user) {
         setUser(session.user as User);
         await loadProfile(session.user.id);
-      } else if (event === 'SIGNED_OUT') {
+      } else if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED' && !session) {
+        // TOKEN_REFRESHED with no session means refresh failed
         setUser(null);
         setProfile(null);
       }
