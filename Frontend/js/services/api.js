@@ -867,6 +867,172 @@ export async function getUserStats(userId) {
 }
 
 // ============================================
+// Realtime Subscriptions
+// ============================================
+
+// Store active subscriptions for cleanup
+let realtimeChannel = null;
+
+/**
+ * Subscribe to realtime database changes
+ * @param {string} userId - Current user ID
+ * @param {Object} callbacks - Callback functions for each event type
+ * @param {Function} callbacks.onPhotosChange - Called when photos table changes
+ * @param {Function} callbacks.onFriendshipsChange - Called when friendships table changes
+ * @param {Function} callbacks.onGroupsChange - Called when groups table changes
+ * @param {Function} callbacks.onPhotoGroupsChange - Called when photo_groups table changes
+ * @returns {Object} - Subscription channel for cleanup
+ */
+export function subscribeToRealtimeChanges(userId, callbacks = {}) {
+    // Unsubscribe from existing channel if any
+    if (realtimeChannel) {
+        supabase.removeChannel(realtimeChannel);
+        realtimeChannel = null;
+    }
+
+    const channel = supabase.channel('db-changes');
+
+    // Subscribe to photos table changes (own photos)
+    if (callbacks.onPhotosChange) {
+        channel.on(
+            'postgres_changes',
+            {
+                event: '*',
+                schema: 'public',
+                table: 'photos',
+                filter: `user_id=eq.${userId}`
+            },
+            (payload) => {
+                console.log('📸 Photos change detected:', payload.eventType);
+                callbacks.onPhotosChange(payload);
+            }
+        );
+    }
+
+    // Subscribe to friendships table changes
+    if (callbacks.onFriendshipsChange) {
+        channel.on(
+            'postgres_changes',
+            {
+                event: '*',
+                schema: 'public',
+                table: 'friendships',
+                filter: `user_id=eq.${userId}`
+            },
+            (payload) => {
+                console.log('👥 Friendships change detected:', payload.eventType);
+                callbacks.onFriendshipsChange(payload);
+            }
+        );
+    }
+
+    // Subscribe to groups table changes
+    if (callbacks.onGroupsChange) {
+        channel.on(
+            'postgres_changes',
+            {
+                event: '*',
+                schema: 'public',
+                table: 'groups',
+                filter: `user_id=eq.${userId}`
+            },
+            (payload) => {
+                console.log('📁 Groups change detected:', payload.eventType);
+                callbacks.onGroupsChange(payload);
+            }
+        );
+    }
+
+    // Subscribe to photo_groups table changes (for group assignments)
+    if (callbacks.onPhotoGroupsChange) {
+        channel.on(
+            'postgres_changes',
+            {
+                event: '*',
+                schema: 'public',
+                table: 'photo_groups'
+            },
+            (payload) => {
+                console.log('🔗 Photo-Groups change detected:', payload.eventType);
+                callbacks.onPhotoGroupsChange(payload);
+            }
+        );
+    }
+
+    // Subscribe to the channel
+    channel.subscribe((status) => {
+        console.log('🔌 Realtime subscription status:', status);
+    });
+
+    realtimeChannel = channel;
+    return channel;
+}
+
+/**
+ * Subscribe to friends' photos changes
+ * This requires a separate subscription since we need to watch multiple user_ids
+ * @param {Array<string>} friendIds - Array of friend user IDs
+ * @param {Function} onFriendPhotosChange - Callback when friend uploads a photo
+ * @returns {Object} - Subscription channel
+ */
+let friendPhotosChannel = null;
+
+export function subscribeToFriendPhotos(friendIds, onFriendPhotosChange) {
+    // Unsubscribe from existing channel if any
+    if (friendPhotosChannel) {
+        supabase.removeChannel(friendPhotosChannel);
+        friendPhotosChannel = null;
+    }
+
+    if (!friendIds || friendIds.length === 0) {
+        return null;
+    }
+
+    const channel = supabase.channel('friend-photos-changes');
+
+    // Subscribe to each friend's photos
+    // Note: Supabase realtime filter supports `in` operator
+    channel.on(
+        'postgres_changes',
+        {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'photos',
+            filter: `user_id=in.(${friendIds.join(',')})`
+        },
+        (payload) => {
+            console.log('📸 Friend photo added:', payload);
+            if (onFriendPhotosChange) {
+                onFriendPhotosChange(payload);
+            }
+        }
+    );
+
+    channel.subscribe((status) => {
+        console.log('🔌 Friend photos subscription status:', status);
+    });
+
+    friendPhotosChannel = channel;
+    return channel;
+}
+
+/**
+ * Unsubscribe from all realtime channels
+ */
+export function unsubscribeFromRealtime() {
+    if (realtimeChannel) {
+        supabase.removeChannel(realtimeChannel);
+        realtimeChannel = null;
+        console.log('🔌 Unsubscribed from main realtime channel');
+    }
+    if (friendPhotosChannel) {
+        supabase.removeChannel(friendPhotosChannel);
+        friendPhotosChannel = null;
+        console.log('🔌 Unsubscribed from friend photos channel');
+    }
+}
+
+// ============================================
 // Export all
 // ============================================
 
@@ -905,4 +1071,9 @@ export default {
     updateLastSync,
     getUserStats,
     deleteUserAccount,
+
+    // Realtime
+    subscribeToRealtimeChanges,
+    subscribeToFriendPhotos,
+    unsubscribeFromRealtime,
 };

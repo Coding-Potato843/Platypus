@@ -236,6 +236,11 @@ removeFriend(userId, friendId), searchUsers(searchTerm)
 // User
 getUserProfile(userId), updateUserProfile(userId, updates), updateLastSync(userId), getUserStats(userId)
 deleteUserAccount(userId)  // Deletes all user data (photos, groups, friendships, user profile)
+
+// Realtime Subscriptions
+subscribeToRealtimeChanges(userId, callbacks)  // Subscribe to photos, groups, friendships changes
+subscribeToFriendPhotos(friendIds, callback)   // Subscribe to friends' new photo uploads
+unsubscribeFromRealtime()                       // Cleanup all subscriptions (call on logout)
 ```
 
 ### auth.js
@@ -277,6 +282,11 @@ handleSortOrderChange(order)  // Change sort order (asc/desc)
 // Utility Functions
 formatDate(dateString)        // Format date as "YYYY년 M월 D일" (Korean locale)
 formatDateTime(dateString)    // Format datetime as "YYYY-MM-DD HH:mm" (exact time)
+
+// Realtime (auto-called, no manual invocation needed)
+setupRealtimeSubscriptions()       // Setup live DB sync (called after login)
+setupFriendPhotosSubscription()    // Subscribe to friends' uploads
+cleanupRealtimeSubscriptions()     // Cleanup on logout
 ```
 
 ### utils/exif.js
@@ -420,6 +430,7 @@ confirmDeleteAccount() → handleDeleteAccount() → deleteAccount() (auth.js)
 - **Timezone handling fix** - Web date functions properly handle Supabase timestamps with/without timezone info (Z, +00:00, etc.)
 - **Friends tab empty state** - Different empty message for Friends tab vs My Photos tab
 - **Add Friend button moved** - Relocated from Account tab to Friends tab header for better UX
+- **Supabase Realtime** - Live database sync without browser refresh (photos, groups, friendships auto-update)
 
 ### Required Setup
 Run these in **Supabase SQL Editor** before using the app:
@@ -462,6 +473,15 @@ Run these in **Supabase SQL Editor** before using the app:
    -- Grant execute permission to authenticated users
    GRANT EXECUTE ON FUNCTION public.delete_user_auth() TO authenticated;
    ```
+
+5. **Realtime setup** (for live database sync without browser refresh)
+   - Go to **Supabase Dashboard** → **Database** → **Replication**
+   - Enable Realtime for these tables:
+     - `photos` ✅
+     - `friendships` ✅
+     - `groups` ✅
+     - `photo_groups` ✅
+   - Click **Save**
 
 ---
 

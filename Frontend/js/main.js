@@ -25,7 +25,10 @@ import {
     updateUserProfile,
     ApiError,
     calculateFileHash,
-    checkDuplicateHashes
+    checkDuplicateHashes,
+    subscribeToRealtimeChanges,
+    subscribeToFriendPhotos,
+    unsubscribeFromRealtime
 } from './services/api.js';
 import { extractExifData, getFileDate, reverseGeocode } from './utils/exif.js';
 
@@ -231,6 +234,124 @@ async function loadAllUserData(showLoadingOverlay = true) {
             hideLoading();
         }
     }
+}
+
+// ============================================
+// Realtime Subscriptions
+// ============================================
+
+/**
+ * Setup realtime subscriptions for database changes
+ * Called after user authentication
+ */
+function setupRealtimeSubscriptions() {
+    const user = getCurrentUser();
+    if (!user) {
+        console.warn('Cannot setup realtime: no user logged in');
+        return;
+    }
+
+    console.log('🔌 Setting up realtime subscriptions for user:', user.id);
+
+    // Subscribe to own data changes
+    subscribeToRealtimeChanges(user.id, {
+        // When own photos change (INSERT, UPDATE, DELETE)
+        onPhotosChange: (payload) => {
+            console.log('📸 Realtime: Photos changed', payload.eventType);
+            // Debounce to avoid multiple rapid reloads
+            debounceReload('photos', () => {
+                loadPhotos();
+                showToast('갤러리가 업데이트되었습니다', 'info');
+            });
+        },
+
+        // When friendships change
+        onFriendshipsChange: (payload) => {
+            console.log('👥 Realtime: Friendships changed', payload.eventType);
+            debounceReload('friendships', async () => {
+                await loadFriends();
+                await loadFriendPhotos();
+                renderFriendsList();
+                // Re-subscribe to friend photos with updated friend list
+                setupFriendPhotosSubscription();
+                showToast('친구 목록이 업데이트되었습니다', 'info');
+            });
+        },
+
+        // When groups change
+        onGroupsChange: (payload) => {
+            console.log('📁 Realtime: Groups changed', payload.eventType);
+            debounceReload('groups', () => {
+                loadGroups();
+            });
+        },
+
+        // When photo-group assignments change
+        onPhotoGroupsChange: (payload) => {
+            console.log('🔗 Realtime: Photo-Groups changed', payload.eventType);
+            debounceReload('photoGroups', () => {
+                loadPhotos();
+            });
+        }
+    });
+
+    // Setup friend photos subscription
+    setupFriendPhotosSubscription();
+}
+
+/**
+ * Setup subscription for friends' photo uploads
+ */
+function setupFriendPhotosSubscription() {
+    const friendIds = state.friends.map(f => f.id);
+
+    if (friendIds.length === 0) {
+        console.log('📸 No friends to subscribe to');
+        return;
+    }
+
+    console.log('📸 Subscribing to friend photos for', friendIds.length, 'friends');
+
+    subscribeToFriendPhotos(friendIds, (payload) => {
+        console.log('📸 Realtime: Friend uploaded a photo');
+        debounceReload('friendPhotos', () => {
+            loadFriendPhotos();
+            showToast('친구가 새 사진을 업로드했습니다', 'info');
+        });
+    });
+}
+
+// Debounce timers for realtime updates
+const reloadTimers = {};
+
+/**
+ * Debounce function to prevent rapid multiple reloads
+ * @param {string} key - Unique key for this reload type
+ * @param {Function} callback - Function to call after debounce
+ * @param {number} delay - Debounce delay in ms (default: 1000)
+ */
+function debounceReload(key, callback, delay = 1000) {
+    if (reloadTimers[key]) {
+        clearTimeout(reloadTimers[key]);
+    }
+    reloadTimers[key] = setTimeout(() => {
+        callback();
+        delete reloadTimers[key];
+    }, delay);
+}
+
+/**
+ * Cleanup realtime subscriptions
+ * Called on logout
+ */
+function cleanupRealtimeSubscriptions() {
+    console.log('🔌 Cleaning up realtime subscriptions');
+    unsubscribeFromRealtime();
+    // Clear any pending debounce timers
+    Object.keys(reloadTimers).forEach(key => {
+        clearTimeout(reloadTimers[key]);
+        delete reloadTimers[key];
+    });
 }
 
 // ============================================
@@ -756,9 +877,15 @@ async function updateUIForAuthenticatedUser(showLoadingOverlay = true) {
 
     // Load all user data from Supabase
     await loadAllUserData(showLoadingOverlay);
+
+    // Setup realtime subscriptions for live updates
+    setupRealtimeSubscriptions();
 }
 
 function updateUIForUnauthenticatedUser() {
+    // Cleanup realtime subscriptions
+    cleanupRealtimeSubscriptions();
+
     // Show auth page, hide app
     elements.authPage.style.display = 'flex';
     elements.appContainer.style.display = 'none';
