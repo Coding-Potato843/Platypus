@@ -529,6 +529,7 @@ See `app/app_description.txt` for detailed documentation.
   - **Select from Gallery Tab**: Manual selection from entire gallery, does NOT update `last_sync_at`
 - Pre-selected photos in scan mode (user deselects unwanted)
 - Reverse geocoding (GPS → location name)
+- **Last Sync Date Editor**: "수정" button to manually edit scan date (past to current time)
 
 ### Development Commands
 ```bash
@@ -593,6 +594,7 @@ APK is downloaded from Expo dashboard after build completes.
 - ✅ **GPS Location Fix** - Uses `assetInfo.location` (standard format) with EXIF fallback
 - ✅ **Selective last_sync_at Update** - Only "Gallery Scan" tab updates last scan date; "Select from Gallery" does not
 - ✅ **Custom Alert/Toast UI** - Dark theme custom alert modals and toast notifications (replaces system Alert.alert)
+- ✅ **Last Sync Date Editor** - "수정" button to manually edit scan date (past to current time only)
 - ❌ Background upload not planned (manual import only)
 
 ### Tab-Based Import UI
@@ -606,7 +608,8 @@ The mobile app uses a tab-based UI to clearly separate two import methods, each 
 - Switching tabs preserves photos in each list
 
 **Tab 1: Gallery Scan (갤러리 스캔)**
-- Shows "마지막 스캔 날짜" (Last Scan Date) info box
+- Shows "마지막 스캔 날짜" (Last Scan Date) info box with "수정" (Edit) button for manual editing
+- Date format: `YY년 M월 D일 오전/오후 H:MM` (e.g., "25년 1월 20일 오후 2:30")
 - Auto-scans photos after last scan date using `modificationTime`
 - Photos are PRE-SELECTED by default (user deselects unwanted)
 - On upload: Updates `last_sync_at` to current time

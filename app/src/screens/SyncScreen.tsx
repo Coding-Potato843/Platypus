@@ -14,13 +14,14 @@ import { PhotoGrid } from '../components/PhotoGrid';
 import { LoadingOverlay } from '../components/LoadingOverlay';
 import { GalleryPickerModal } from '../components/GalleryPickerModal';
 import { PermissionModal } from '../components/PermissionModal';
+import { LastSyncDateEditor } from '../components/LastSyncDateEditor';
 import { useCustomAlert, useToast } from '../components/CustomAlert';
 import * as MediaLibrary from 'expo-media-library';
 import {
   fetchPhotosAfterDate,
   uploadPhotos,
 } from '../services/photos';
-import { updateLastSync } from '../services/auth';
+import { updateLastSync, setLastSync } from '../services/auth';
 
 type SyncScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Sync'>;
@@ -47,6 +48,7 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
   const [isUploading, setIsUploading] = useState(false);
   const [isGalleryPickerVisible, setIsGalleryPickerVisible] = useState(false);
+  const [isDateEditorVisible, setIsDateEditorVisible] = useState(false);
 
   // 현재 탭의 사진 목록
   const currentPhotos = activeTab === 'scan' ? scanPhotos : pickerPhotos;
@@ -243,16 +245,39 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
     });
   }, []);
 
+  // Handle last sync date change
+  const handleLastSyncDateChange = useCallback(async (newDate: Date) => {
+    if (!user) return;
+
+    setIsDateEditorVisible(false);
+    setLoadingMessage('스캔 날짜 변경 중...');
+    setIsScanning(true);
+
+    try {
+      await setLastSync(user.id, newDate);
+      await refreshProfile();
+      showToast('스캔 날짜가 변경되었습니다');
+      // Clear scan photos since the date changed
+      setScanPhotos([]);
+    } catch (error) {
+      console.error('Date change error:', error);
+      showAlert('오류', '스캔 날짜 변경에 실패했습니다.');
+    } finally {
+      setIsScanning(false);
+    }
+  }, [user, refreshProfile, showToast, showAlert]);
+
   // Format date for display
   const formatDate = (date: Date | null) => {
     if (!date) return '없음';
-    return date.toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const year = date.getFullYear().toString().slice(-2);
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    const hour = date.getHours();
+    const minute = date.getMinutes().toString().padStart(2, '0');
+    const ampm = hour < 12 ? '오전' : '오후';
+    const hour12 = hour % 12 || 12;
+    return `${year}년 ${month}월 ${day}일 ${ampm} ${hour12}:${minute}`;
   };
 
   // 탭 전환 핸들러
@@ -302,7 +327,15 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
       {activeTab === 'scan' && (
         <View style={styles.syncInfo}>
           <Text style={styles.syncLabel}>마지막 스캔 날짜</Text>
-          <Text style={styles.syncDate}>{formatDate(lastSyncDate)}</Text>
+          <View style={styles.syncDateContainer}>
+            <Text style={styles.syncDate}>{formatDate(lastSyncDate)}</Text>
+            <TouchableOpacity
+              style={styles.editDateButton}
+              onPress={() => setIsDateEditorVisible(true)}
+            >
+              <Text style={styles.editDateIcon}>수정</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
@@ -424,6 +457,14 @@ export function SyncScreen({ navigation }: SyncScreenProps) {
         }}
       />
 
+      {/* Last Sync Date Editor Modal */}
+      <LastSyncDateEditor
+        visible={isDateEditorVisible}
+        currentDate={lastSyncDate}
+        onClose={() => setIsDateEditorVisible(false)}
+        onConfirm={handleLastSyncDateChange}
+      />
+
       {/* Custom Alert Modal */}
       <AlertComponent />
 
@@ -501,10 +542,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#94a3b8',
   },
+  syncDateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   syncDate: {
     fontSize: 14,
     color: '#06b6d4',
     fontWeight: '500',
+  },
+  editDateButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#334155',
+    borderRadius: 4,
+  },
+  editDateIcon: {
+    fontSize: 12,
+    color: '#94a3b8',
   },
   emptyState: {
     flex: 1,

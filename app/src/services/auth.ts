@@ -84,7 +84,7 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
 }
 
 /**
- * Update last sync timestamp
+ * Update last sync timestamp to current time
  */
 export async function updateLastSync(userId: string): Promise<void> {
   const { error } = await supabase
@@ -95,6 +95,21 @@ export async function updateLastSync(userId: string): Promise<void> {
   if (error) {
     console.error('Update last sync error:', error);
     throw new Error('스캔 시간 업데이트에 실패했습니다.');
+  }
+}
+
+/**
+ * Set last sync timestamp to a specific date
+ */
+export async function setLastSync(userId: string, date: Date): Promise<void> {
+  const { error } = await supabase
+    .from('users')
+    .update({ last_sync_at: date.toISOString() })
+    .eq('id', userId);
+
+  if (error) {
+    console.error('Set last sync error:', error);
+    throw new Error('스캔 날짜 변경에 실패했습니다.');
   }
 }
 

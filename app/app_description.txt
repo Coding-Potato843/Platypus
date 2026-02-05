@@ -53,6 +53,7 @@ app/
 │   │   ├── DateRangePicker.tsx     # Year/month date picker
 │   │   ├── FilterBar.tsx           # Collapsible filter UI
 │   │   ├── PermissionModal.tsx     # Gallery permission request modal
+│   │   ├── LastSyncDateEditor.tsx  # Last sync date editor modal
 │   │   └── CustomAlert.tsx     # Dark theme alert modal & toast (replaces Alert.alert)
 │   └── screens/
 │       ├── LoginScreen.tsx     # Email/password login form
@@ -111,8 +112,9 @@ The app uses a tab-based interface to clearly separate two import methods. Each 
 - Tabs preserve their photo lists when switching between them
 
 #### Tab 1: "갤러리 스캔" (Gallery Scan)
-1. Shows "마지막 스캔 날짜" (Last Scan Date) info box
-2. User taps "갤러리 스캔" button
+1. Shows "마지막 스캔 날짜" (Last Scan Date) info box with "수정" (Edit) button
+2. User can tap "수정" button to manually change the last scan date
+3. User taps "갤러리 스캔" button
 3. App requests gallery permission (expo-media-library)
 4. Scans all photos from device
 5. Filters: only photos with `modificationTime > last_sync_at` (last scan date)
@@ -330,6 +332,36 @@ return (
 **Where Used:**
 - `SyncScreen.tsx`: Upload confirmation, scan complete, upload success (toast), errors, logout
 - `LoginScreen.tsx`: Login errors, validation messages
+
+### 10. Last Sync Date Editor (components/LastSyncDateEditor.tsx)
+
+Allows users to manually edit the last scan date (마지막 스캔 날짜).
+
+**Features:**
+- "수정" (Edit) button next to the last scan date in Gallery Scan tab
+- Full date/time selection: Year, Month, Day, Hour, Minute
+- Future dates are disabled (only past to current time selectable)
+- "현재 시간으로 설정" button to quickly set to current time
+- Dark theme styling matching the app
+- Compact date format: `YY년 M월 D일 오전/오후 H:MM` (e.g., "25년 1월 20일 오후 2:30")
+
+**Use Cases:**
+- User wants to re-scan photos from a specific date
+- User accidentally advanced the scan date and wants to reset it
+- User migrating from another device and wants to import older photos
+
+**UI Components:**
+- Modal with year/month/day pickers (scrollable)
+- Separate hour/minute pickers for time
+- "현재 시간으로 설정" quick-set button
+- Warning message for future dates
+- Cancel/Confirm buttons at bottom
+
+**Behavior:**
+- Opens when user taps the "수정" button
+- Pre-selects current last sync date (or current time if null)
+- Clears scan photos list after date change
+- Shows toast notification on success
 
 ---
 
@@ -680,6 +712,7 @@ npx serve dist
 - ✅ **GPS Location Fix** - Uses `assetInfo.location` (standard) with EXIF fallback for proper location extraction
 - ✅ **Double Back to Exit** - Press back twice within 2 seconds to exit app (Android only, with toast notification)
 - ✅ **Custom Alert/Toast UI** - Dark theme alert modals and toast notifications replacing system Alert.alert
+- ✅ **Last Sync Date Editor** - Manual editing of last scan date via "수정" button (past to current time only)
 
 ### Notes
 - **Development build required**: Expo Go has limitations with media library access and lacks expo-crypto native module
@@ -717,3 +750,4 @@ npx serve dist
 - [x] **Tab-Based UI** - Separated "Gallery Scan" and "Select from Gallery" into distinct tabs with independent photo lists
 - [x] **Selective last_sync_at Update** - "Gallery Scan" tab updates last scan date on upload; "Select from Gallery" tab does not
 - [x] **Custom Alert/Toast UI** - Dark theme custom alert modals replacing system Alert.alert; toast notifications for upload success (auto-dismiss after 2.5s); button order: action on top, cancel on bottom
+- [x] **Last Sync Date Editor** - "수정" button next to last scan date; manual date/time editing with year/month/day/hour/minute pickers; future date prevention; "현재 시간으로 설정" quick button; compact date format (YY년 M월 D일)
