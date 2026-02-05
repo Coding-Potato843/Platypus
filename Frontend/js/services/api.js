@@ -377,6 +377,35 @@ export async function updatePhotoGroups(photoId, groupIds) {
     return { success: true };
 }
 
+/**
+ * Add multiple photos to a group (batch operation)
+ * @param {string} groupId - Target group ID
+ * @param {string[]} photoIds - Array of photo IDs to add
+ * @returns {Promise<Object>} - { success: true, added: number }
+ */
+export async function addPhotosToGroup(groupId, photoIds) {
+    if (!photoIds || photoIds.length === 0) {
+        return { success: true, added: 0 };
+    }
+
+    // Create insert data (photo_groups junction table)
+    const insertData = photoIds.map(photoId => ({
+        photo_id: photoId,
+        group_id: groupId,
+    }));
+
+    // Use upsert to handle potential duplicates gracefully
+    const { error } = await supabase
+        .from('photo_groups')
+        .upsert(insertData, { onConflict: 'photo_id,group_id' });
+
+    if (error) {
+        throw new ApiError(500, error.message);
+    }
+
+    return { success: true, added: photoIds.length };
+}
+
 // ============================================
 // Group API (Supabase)
 // ============================================
@@ -1047,6 +1076,7 @@ export default {
     uploadPhotos,
     deletePhoto,
     updatePhotoGroups,
+    addPhotosToGroup,
 
     // Hash utilities
     calculateFileHash,

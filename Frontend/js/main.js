@@ -12,6 +12,7 @@ import {
     uploadPhotos,
     deletePhoto,
     updatePhotoGroups,
+    addPhotosToGroup,
     getGroups,
     createGroup as apiCreateGroup,
     updateGroup as apiUpdateGroup,
@@ -384,6 +385,7 @@ const state = {
         order: 'desc',       // 'asc' (오름차순) or 'desc' (내림차순)
     },
     selectedSyncPhotos: new Set(),
+    selectedAddToGroupPhotos: new Set(), // Selected photo IDs for adding to group
     syncFiles: [], // {file, preview, date, location, id}
     lastSyncDate: null,
     currentPhotoId: null,
@@ -458,6 +460,16 @@ const elements = {
     importPhotosBtn: document.getElementById('importPhotosBtn'),
     uploadProgressBar: document.getElementById('uploadProgressBar'),
     uploadProgressText: document.getElementById('uploadProgressText'),
+
+    // Add to Group Modal Elements
+    addToGroupModal: document.getElementById('addToGroupModal'),
+    addToGroupTitle: document.getElementById('addToGroupTitle'),
+    addToGroupCount: document.getElementById('addToGroupCount'),
+    addToGroupGallery: document.getElementById('addToGroupGallery'),
+    selectAllAddToGroupBtn: document.getElementById('selectAllAddToGroupBtn'),
+    deselectAllAddToGroupBtn: document.getElementById('deselectAllAddToGroupBtn'),
+    confirmAddToGroupBtn: document.getElementById('confirmAddToGroupBtn'),
+    addPhotosToGroupBtn: document.getElementById('addPhotosToGroupBtn'),
 
     // Group Modal Elements
     newGroupName: document.getElementById('newGroupName'),
@@ -1182,7 +1194,186 @@ function filterByGroup(groupId) {
         chip.classList.toggle('active', chip.dataset.group === groupId);
     });
 
+    // Update "Add Photos to Group" button visibility
+    updateAddPhotosButtonVisibility();
+
     renderMyPhotos();
+}
+
+// ============================================
+// Add Photos to Group
+// ============================================
+
+/**
+ * Update visibility of "Add Photos to Group" button
+ * Shows only when a specific group is selected (not "all")
+ */
+function updateAddPhotosButtonVisibility() {
+    const isGroupSelected = state.currentGroup !== 'all';
+    elements.addPhotosToGroupBtn.style.display = isGroupSelected ? 'flex' : 'none';
+}
+
+/**
+ * Open the "Add Photos to Group" modal
+ */
+function openAddToGroupModal() {
+    if (state.currentGroup === 'all') return;
+
+    // Reset selection state
+    state.selectedAddToGroupPhotos.clear();
+
+    // Get current group name for title
+    const currentGroup = state.groups.find(g => g.id === state.currentGroup);
+    const groupName = currentGroup ? currentGroup.name : '그룹';
+    elements.addToGroupTitle.textContent = `"${groupName}"에 사진 추가`;
+
+    // Render photos
+    renderAddToGroupGallery();
+
+    openModal(elements.addToGroupModal);
+}
+
+/**
+ * Render the gallery for adding photos to group
+ */
+function renderAddToGroupGallery() {
+    // Get photos NOT already in the current group
+    const photosNotInGroup = state.photos.filter(
+        photo => !photo.groupIds.includes(state.currentGroup)
+    );
+
+    // Get photos already in the current group (for disabled display)
+    const photosInGroup = state.photos.filter(
+        photo => photo.groupIds.includes(state.currentGroup)
+    );
+
+    // Update count (only selectable photos)
+    elements.addToGroupCount.textContent = photosNotInGroup.length;
+
+    if (state.photos.length === 0) {
+        elements.addToGroupGallery.innerHTML = `
+            <div class="gallery-empty" style="grid-column: 1 / -1;">
+                <i class="ph ph-camera-slash"></i>
+                <p>사진이 없습니다</p>
+            </div>
+        `;
+        return;
+    }
+
+    // Render all photos: selectable ones first, then disabled ones
+    const allPhotos = [...photosNotInGroup, ...photosInGroup];
+
+    elements.addToGroupGallery.innerHTML = allPhotos.map(photo => {
+        const isInGroup = photo.groupIds.includes(state.currentGroup);
+        const isSelected = state.selectedAddToGroupPhotos.has(photo.id);
+
+        return `
+            <div class="add-to-group-photo-item ${isSelected ? 'selected' : ''} ${isInGroup ? 'disabled' : ''}"
+                 data-photo-id="${photo.id}"
+                 ${isInGroup ? 'title="이미 그룹에 포함됨"' : ''}>
+                <img src="${photo.url}" alt="Photo" loading="lazy">
+                <div class="check-overlay">
+                    <i class="ph-bold ph-check"></i>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // Add click handlers (only for non-disabled items)
+    elements.addToGroupGallery.querySelectorAll('.add-to-group-photo-item:not(.disabled)').forEach(item => {
+        item.addEventListener('click', () => {
+            toggleAddToGroupPhoto(item.dataset.photoId, item);
+        });
+    });
+
+    updateConfirmAddToGroupButtonState();
+}
+
+/**
+ * Toggle photo selection for adding to group
+ */
+function toggleAddToGroupPhoto(photoId, element) {
+    if (state.selectedAddToGroupPhotos.has(photoId)) {
+        state.selectedAddToGroupPhotos.delete(photoId);
+        element.classList.remove('selected');
+    } else {
+        state.selectedAddToGroupPhotos.add(photoId);
+        element.classList.add('selected');
+    }
+    updateConfirmAddToGroupButtonState();
+}
+
+/**
+ * Update the confirm button state
+ */
+function updateConfirmAddToGroupButtonState() {
+    elements.confirmAddToGroupBtn.disabled = state.selectedAddToGroupPhotos.size === 0;
+
+    // Update button text with count
+    const count = state.selectedAddToGroupPhotos.size;
+    elements.confirmAddToGroupBtn.innerHTML = count > 0
+        ? `<i class="ph ph-plus"></i><span>${count}장 추가</span>`
+        : `<i class="ph ph-plus"></i><span>추가</span>`;
+}
+
+/**
+ * Select all photos for adding to group
+ */
+function selectAllAddToGroupPhotos() {
+    elements.addToGroupGallery.querySelectorAll('.add-to-group-photo-item:not(.disabled)').forEach(item => {
+        const photoId = item.dataset.photoId;
+        state.selectedAddToGroupPhotos.add(photoId);
+        item.classList.add('selected');
+    });
+    updateConfirmAddToGroupButtonState();
+}
+
+/**
+ * Deselect all photos for adding to group
+ */
+function deselectAllAddToGroupPhotos() {
+    state.selectedAddToGroupPhotos.clear();
+    elements.addToGroupGallery.querySelectorAll('.add-to-group-photo-item').forEach(item => {
+        item.classList.remove('selected');
+    });
+    updateConfirmAddToGroupButtonState();
+}
+
+/**
+ * Confirm and add selected photos to the current group
+ */
+async function confirmAddPhotosToGroup() {
+    if (state.selectedAddToGroupPhotos.size === 0) return;
+
+    const groupId = state.currentGroup;
+    const photoIds = Array.from(state.selectedAddToGroupPhotos);
+
+    showLoading('사진을 그룹에 추가하는 중...');
+
+    try {
+        // Call batch API
+        await addPhotosToGroup(groupId, photoIds);
+
+        // Update local state
+        photoIds.forEach(photoId => {
+            const photo = state.photos.find(p => p.id === photoId);
+            if (photo && !photo.groupIds.includes(groupId)) {
+                photo.groupIds.push(groupId);
+            }
+        });
+
+        hideLoading();
+        closeModal(elements.addToGroupModal);
+
+        // Refresh gallery to show new photos in group
+        renderMyPhotos();
+
+        showToast(`${photoIds.length}장의 사진이 그룹에 추가되었습니다`, 'success');
+    } catch (error) {
+        hideLoading();
+        console.error('Failed to add photos to group:', error);
+        showToast('사진 추가에 실패했습니다', 'error');
+    }
 }
 
 // ============================================
@@ -2386,6 +2577,12 @@ function setupEventListeners() {
         elements.photoFileInput.click();
     });
     elements.importPhotosBtn.addEventListener('click', importSelectedPhotos);
+
+    // Add to Group modal
+    elements.addPhotosToGroupBtn?.addEventListener('click', openAddToGroupModal);
+    elements.selectAllAddToGroupBtn?.addEventListener('click', selectAllAddToGroupPhotos);
+    elements.deselectAllAddToGroupBtn?.addEventListener('click', deselectAllAddToGroupPhotos);
+    elements.confirmAddToGroupBtn?.addEventListener('click', confirmAddPhotosToGroup);
 
     // Photo modal buttons
     elements.downloadPhotoBtn.addEventListener('click', handlePhotoDownload);

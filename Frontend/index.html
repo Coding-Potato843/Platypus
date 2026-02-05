@@ -227,6 +227,9 @@
                             <span>음식</span>
                         </button>
                     </div>
+                    <button class="btn btn-icon" id="addPhotosToGroupBtn" style="display: none;" aria-label="그룹에 사진 추가">
+                        <i class="ph ph-plus-circle"></i>
+                    </button>
                     <button class="btn btn-icon" id="manageGroupsBtn" aria-label="그룹 관리">
                         <i class="ph ph-gear-six"></i>
                     </button>
@@ -467,6 +470,41 @@
                 <button class="btn btn-primary" id="importPhotosBtn" disabled>
                     <i class="ph ph-upload"></i>
                     <span>선택한 사진 가져오기</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Photos to Group Modal -->
+    <div class="modal" id="addToGroupModal">
+        <div class="modal-overlay" data-close-modal></div>
+        <div class="modal-content add-to-group-modal-content">
+            <div class="modal-header">
+                <h2>
+                    <i class="ph ph-plus-circle"></i>
+                    <span id="addToGroupTitle">그룹에 사진 추가</span>
+                </h2>
+                <button class="modal-close" data-close-modal aria-label="닫기">
+                    <i class="ph ph-x"></i>
+                </button>
+            </div>
+            <div class="add-to-group-body">
+                <p class="add-to-group-description">
+                    <span id="addToGroupCount">0</span>장의 사진을 선택할 수 있습니다
+                </p>
+                <div class="add-to-group-actions-top">
+                    <button class="btn btn-link" id="selectAllAddToGroupBtn">전체 선택</button>
+                    <button class="btn btn-link" id="deselectAllAddToGroupBtn">전체 해제</button>
+                </div>
+                <div class="add-to-group-gallery" id="addToGroupGallery">
+                    <!-- Photos will be rendered here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-close-modal>취소</button>
+                <button class="btn btn-primary" id="confirmAddToGroupBtn" disabled>
+                    <i class="ph ph-plus"></i>
+                    <span>추가</span>
                 </button>
             </div>
         </div>
