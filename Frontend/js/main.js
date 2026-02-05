@@ -925,15 +925,18 @@ function getFilteredPhotos(photos) {
     return filtered;
 }
 
-function renderGallery(galleryElement, photos, showLoadMore = false, hasMore = false, loadMoreCallback = null) {
+function renderGallery(galleryElement, photos, showLoadMore = false, hasMore = false, loadMoreCallback = null, isFriendsTab = false) {
     const filtered = getFilteredPhotos(photos);
 
     if (filtered.length === 0) {
+        const emptyMessage = isFriendsTab
+            ? '친구를 추가하거나<br>친구가 사진을 업로드할 때까지 기다려주세요.'
+            : '불러오기 버튼을 눌러 사진을 추가하거나 필터를 조정해보세요.';
         galleryElement.innerHTML = `
             <div class="gallery-empty">
                 <i class="ph ph-camera-slash"></i>
                 <h3>사진이 없습니다</h3>
-                <p>불러오기 버튼을 눌러 사진을 추가하거나 필터를 조정해보세요.</p>
+                <p>${emptyMessage}</p>
             </div>
         `;
         return;
@@ -1006,7 +1009,8 @@ function renderFriendPhotos() {
         state.friendPhotos,
         true,
         state.pagination.hasMoreFriendPhotos,
-        () => loadFriendPhotos(true)
+        () => loadFriendPhotos(true),
+        true  // isFriendsTab
     );
 }
 

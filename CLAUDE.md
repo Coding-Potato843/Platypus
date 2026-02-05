@@ -1,5 +1,38 @@
 > **Note**: This file must be written in English only. All documentation should be in English.
 
+---
+
+## Subagents (Task Tool)
+
+**IMPORTANT**: Actively use subagents for complex tasks to improve efficiency and reduce context usage.
+
+### Available Subagents
+
+| Subagent | Purpose | When to Use |
+|----------|---------|-------------|
+| `Explore` | Codebase exploration | Finding files, understanding structure, searching for keywords |
+| `Plan` | Implementation planning | Designing architecture, planning multi-step implementations |
+| `code-finder` | Locate specific code | Finding where features/functions/logic are implemented |
+| `code-reviewer` | Code review | Analyzing readability, performance, security issues |
+| `error-extractor` | Extract error details | Parsing stack traces, extracting technical facts from logs |
+| `claude-code-guide` | Claude Code help | Questions about Claude Code features, hooks, settings |
+
+### Usage Guidelines
+
+1. **Codebase Exploration**: Use `Explore` agent instead of multiple Glob/Grep calls
+   - Example: "Where is authentication handled?" → Use Explore agent
+
+2. **Code Location**: Use `code-finder` for specific feature searches
+   - Example: "Find the duplicate detection logic" → Use code-finder agent
+
+3. **Code Review**: Use `code-reviewer` before committing significant changes
+
+4. **Error Analysis**: Use `error-extractor` for complex error logs
+
+5. **Parallel Execution**: Launch multiple agents simultaneously for independent tasks
+
+---
+
 # Platypus - Photo Sharing & Organization App
 
 ## Overview
@@ -385,6 +418,7 @@ confirmDeleteAccount() → handleDeleteAccount() → deleteAccount() (auth.js)
 - **Upload date in detail modal** - Photo detail modal shows upload date (`created_at`) in "YYYY년 M월 D일" format below taken date
 - **last_sync_at mobile-only** - Web photo import no longer updates `last_sync_at`; only mobile app gallery scan updates the last scan timestamp
 - **Timezone handling fix** - Web date functions properly handle Supabase timestamps with/without timezone info (Z, +00:00, etc.)
+- **Friends tab empty state** - Different empty message for Friends tab vs My Photos tab
 
 ### Required Setup
 Run these in **Supabase SQL Editor** before using the app:
@@ -484,6 +518,9 @@ The app uses Korean UI text. Key terminology:
 | Upload | 업로드 | Upload date in photo detail modal (format: "YYYY년 M월 D일") |
 | Newest First | 최신순 | Descending order |
 | Oldest First | 오래된순 | Ascending order |
+| No Photos (My Photos) | 사진이 없습니다 | Empty state title |
+| No Photos hint (My Photos) | 불러오기 버튼을 눌러 사진을 추가하거나 필터를 조정해보세요. | Empty state description for My Photos tab |
+| No Photos hint (Friends) | 친구를 추가하거나<br>친구가 사진을 업로드할 때까지 기다려주세요. | Empty state description for Friends tab |
 
 **Note**: The word "동기화" (sync) is NOT used in the UI. Use "불러오기" (import/load) or "스캔" (scan) instead.
 
