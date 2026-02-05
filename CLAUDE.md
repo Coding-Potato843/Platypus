@@ -419,6 +419,7 @@ confirmDeleteAccount() → handleDeleteAccount() → deleteAccount() (auth.js)
 - **last_sync_at mobile-only** - Web photo import no longer updates `last_sync_at`; only mobile app gallery scan updates the last scan timestamp
 - **Timezone handling fix** - Web date functions properly handle Supabase timestamps with/without timezone info (Z, +00:00, etc.)
 - **Friends tab empty state** - Different empty message for Friends tab vs My Photos tab
+- **Add Friend button moved** - Relocated from Account tab to Friends tab header for better UX
 
 ### Required Setup
 Run these in **Supabase SQL Editor** before using the app:

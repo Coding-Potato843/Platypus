@@ -257,8 +257,16 @@
             <!-- Friends Tab -->
             <section class="tab-content" id="friends">
                 <div class="friends-header">
-                    <h2>친구 사진</h2>
-                    <p class="friends-subtitle">친구들이 공유한 사진들을 확인하세요</p>
+                    <div class="friends-header-top">
+                        <div class="friends-header-text">
+                            <h2>친구 사진</h2>
+                            <p class="friends-subtitle">친구들이 공유한 사진들을 확인하세요</p>
+                        </div>
+                        <button class="btn btn-primary" id="addFriendBtn">
+                            <i class="ph ph-user-plus"></i>
+                            <span>친구 추가</span>
+                        </button>
+                    </div>
                 </div>
                 <div class="gallery" id="friendsGallery">
                     <!-- Friend photos will be dynamically rendered here -->
@@ -328,10 +336,6 @@
 
                     <!-- Account Actions -->
                     <div class="account-actions">
-                        <button class="btn btn-secondary btn-full" id="addFriendBtn">
-                            <i class="ph ph-user-plus"></i>
-                            <span>친구 추가</span>
-                        </button>
                         <button class="btn btn-danger btn-full" id="logoutBtn">
                             <i class="ph ph-sign-out"></i>
                             <span>로그아웃</span>
