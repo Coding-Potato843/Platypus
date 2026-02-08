@@ -287,8 +287,14 @@
                                 <i class="ph-fill ph-user"></i>
                             </div>
                             <div class="profile-info">
-                                <h2 class="profile-name" id="userName">사용자</h2>
-                                <span class="profile-id" id="userId">@username</span>
+                                <div class="profile-name-row">
+                                    <span class="profile-label">사용자명</span>
+                                    <h2 class="profile-name" id="userName">사용자</h2>
+                                </div>
+                                <div class="profile-id-row">
+                                    <span class="profile-label">ID</span>
+                                    <span class="profile-id" id="userId">@username</span>
+                                </div>
                             </div>
                             <button class="btn btn-secondary" id="editProfileBtn">
                                 <i class="ph ph-pencil-simple"></i>
@@ -327,18 +333,6 @@
                         </div>
                     </div>
 
-                    <!-- Account Actions -->
-                    <div class="account-actions">
-                        <button class="btn btn-danger btn-full" id="logoutBtn">
-                            <i class="ph ph-sign-out"></i>
-                            <span>로그아웃</span>
-                        </button>
-                        <button class="btn btn-danger-outline btn-full" id="deleteAccountBtn">
-                            <i class="ph ph-user-minus"></i>
-                            <span>회원탈퇴</span>
-                        </button>
-                    </div>
-
                     <!-- Friends List -->
                     <div class="friends-list-section">
                         <h3 class="section-title">
@@ -374,6 +368,18 @@
                         </h3>
                         <div class="request-list" id="sentRequestsList">
                         </div>
+                    </div>
+
+                    <!-- Account Actions -->
+                    <div class="account-actions">
+                        <button class="btn btn-danger btn-full" id="logoutBtn">
+                            <i class="ph ph-sign-out"></i>
+                            <span>로그아웃</span>
+                        </button>
+                        <button class="btn btn-danger-outline btn-full" id="deleteAccountBtn">
+                            <i class="ph ph-user-minus"></i>
+                            <span>회원탈퇴</span>
+                        </button>
                     </div>
                 </div>
             </section>

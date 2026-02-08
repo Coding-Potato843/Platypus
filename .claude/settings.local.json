@@ -21,7 +21,9 @@
       "Bash(eas build:configure:*)",
       "Bash(git commit -m \"$\\(cat <<''EOF''\nMobile app: Gallery scan & upload working with EAS Build\n\n- Add ACCESS_MEDIA_LOCATION permission for GPS EXIF data\n- Configure expo-media-library with isAccessMediaLocationEnabled\n- Fix expo-file-system deprecated API \\(use legacy import\\)\n- Add EAS Build configuration for development APK\n- Update documentation with current status and build instructions\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(npx eas build:list:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(xargs:*)",
+      "Bash(cat:*)"
     ]
   }
 }

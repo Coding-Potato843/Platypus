@@ -826,6 +826,22 @@ body {
     min-width: 150px;
 }
 
+.profile-name-row,
+.profile-id-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.profile-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    flex-shrink: 0;
+}
+
 .profile-name {
     font-size: 1.5rem;
     font-weight: 700;

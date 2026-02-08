@@ -71,15 +71,17 @@ export async function register(email, password, username, displayName) {
             throw new AuthError('이미 사용 중인 이메일입니다.');
         }
 
-        // 2. Create user profile in public.users table
+        // 2. Update user profile in public.users table
+        // The handle_new_user trigger creates the record first using email prefix,
+        // so we upsert to overwrite with the actual username provided during signup.
         const { error: profileError } = await supabase
             .from('users')
-            .insert({
+            .upsert({
                 id: data.user.id,
                 email: email,
                 username: displayName || username,
                 user_id: username,
-            });
+            }, { onConflict: 'id' });
 
         if (profileError) {
             console.error('Profile creation error:', profileError);
