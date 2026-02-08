@@ -19,7 +19,12 @@ import {
     deleteGroup as apiDeleteGroup,
     getFriends,
     getFriendsPhotos,
-    addFriend as apiAddFriend,
+    sendFriendRequest as apiSendFriendRequest,
+    acceptFriendRequest as apiAcceptFriendRequest,
+    rejectFriendRequest as apiRejectFriendRequest,
+    cancelFriendRequest as apiCancelFriendRequest,
+    getPendingRequests,
+    getFriendshipStatuses,
     removeFriend as apiRemoveFriend,
     searchUsers,
     getUserStats,
@@ -213,6 +218,24 @@ async function loadFriends() {
 }
 
 /**
+ * Load pending friend requests from Supabase
+ */
+async function loadPendingRequests() {
+    const user = getCurrentUser();
+    if (!user) return;
+
+    try {
+        const requests = await getPendingRequests(user.id);
+        state.pendingRequests = requests;
+        renderReceivedRequests();
+        renderSentRequests();
+        updateRequestBadges();
+    } catch (error) {
+        console.error('Failed to load pending requests:', error);
+    }
+}
+
+/**
  * Load all user data from Supabase
  * @param {boolean} showLoadingOverlay - Whether to show loading overlay (default: true)
  */
@@ -227,6 +250,7 @@ async function loadAllUserData(showLoadingOverlay = true) {
             loadGroups(),
             loadFriendPhotos(),
             loadFriends(),
+            loadPendingRequests(),
         ]);
     } catch (error) {
         console.error('Failed to load user data:', error);
@@ -266,16 +290,25 @@ function setupRealtimeSubscriptions() {
             });
         },
 
-        // When friendships change
+        // When friendships change (both sent and received)
         onFriendshipsChange: (payload) => {
             console.log('👥 Realtime: Friendships changed', payload.eventType);
             debounceReload('friendships', async () => {
                 await loadFriends();
                 await loadFriendPhotos();
+                await loadPendingRequests();
                 renderFriendsList();
                 // Re-subscribe to friend photos with updated friend list
                 setupFriendPhotosSubscription();
-                showToast('친구 목록이 업데이트되었습니다', 'info');
+                // Show contextual toast
+                if (payload.new?.status === 'accepted') {
+                    showToast('친구 목록이 업데이트되었습니다', 'info');
+                } else if (payload.eventType === 'INSERT' && payload.new?.status === 'pending') {
+                    const user = getCurrentUser();
+                    if (user && payload.new?.friend_id === user.id) {
+                        showToast('새로운 친구 요청이 있습니다', 'info');
+                    }
+                }
             });
         },
 
@@ -362,6 +395,7 @@ const state = {
     photos: [],
     friendPhotos: [],
     friends: [],
+    pendingRequests: { received: [], sent: [] },
     groups: [], // Groups are loaded from Supabase
     currentTab: 'my-photos',
     currentGroup: 'all',
@@ -506,8 +540,16 @@ const elements = {
     friendCount: document.getElementById('friendCount'),
     storageUsed: document.getElementById('storageUsed'),
     friendsList: document.getElementById('friendsList'),
+    receivedRequestsSection: document.getElementById('receivedRequestsSection'),
+    receivedRequestsList: document.getElementById('receivedRequestsList'),
+    receivedRequestCount: document.getElementById('receivedRequestCount'),
+    sentRequestsSection: document.getElementById('sentRequestsSection'),
+    sentRequestsList: document.getElementById('sentRequestsList'),
+    sentRequestCount: document.getElementById('sentRequestCount'),
+    accountRequestBadge: document.getElementById('accountRequestBadge'),
     logoutBtn: document.getElementById('logoutBtn'),
     addFriendBtn: document.getElementById('addFriendBtn'),
+    sendFriendRequestBtn: document.getElementById('sendFriendRequestBtn'),
     editProfileBtn: document.getElementById('editProfileBtn'),
     deleteAccountBtn: document.getElementById('deleteAccountBtn'),
 
@@ -916,6 +958,7 @@ function updateUIForUnauthenticatedUser() {
     state.lastSyncDate = null;
     state.syncFiles = [];
     state.selectedSyncPhotos.clear();
+    state.pendingRequests = { received: [], sent: [] };
 }
 
 // ============================================
@@ -2212,6 +2255,159 @@ function renderFriendsList() {
     });
 }
 
+// ============================================
+// Friend Request Rendering
+// ============================================
+function renderReceivedRequests() {
+    const list = elements.receivedRequestsList;
+    const requests = state.pendingRequests.received;
+
+    if (requests.length === 0) {
+        elements.receivedRequestCount.textContent = '';
+        list.innerHTML = `
+            <div class="gallery-empty" style="padding: 1.5rem 0;">
+                <p>받은 친구 요청이 없습니다</p>
+            </div>
+        `;
+        return;
+    }
+
+    elements.receivedRequestCount.textContent = requests.length;
+
+    list.innerHTML = requests.map(req => `
+        <div class="request-item" data-friendship-id="${req.friendshipId}">
+            <div class="friend-avatar">${getInitials(req.name)}</div>
+            <div class="friend-info">
+                <div class="friend-name">${req.name}</div>
+                <div class="friend-id">@${req.username}</div>
+            </div>
+            <div class="request-actions">
+                <button class="request-accept-btn" aria-label="수락">
+                    <i class="ph-fill ph-check-circle"></i>
+                </button>
+                <button class="request-reject-btn" aria-label="거절">
+                    <i class="ph-fill ph-x-circle"></i>
+                </button>
+            </div>
+        </div>
+    `).join('');
+
+    // Add event handlers
+    list.querySelectorAll('.request-accept-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const friendshipId = btn.closest('.request-item').dataset.friendshipId;
+            handleAcceptRequest(friendshipId);
+        });
+    });
+
+    list.querySelectorAll('.request-reject-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const friendshipId = btn.closest('.request-item').dataset.friendshipId;
+            handleRejectRequest(friendshipId);
+        });
+    });
+}
+
+function renderSentRequests() {
+    const list = elements.sentRequestsList;
+    const requests = state.pendingRequests.sent;
+
+    if (requests.length === 0) {
+        elements.sentRequestCount.textContent = '';
+        list.innerHTML = `
+            <div class="gallery-empty" style="padding: 1.5rem 0;">
+                <p>보낸 친구 요청이 없습니다</p>
+            </div>
+        `;
+        return;
+    }
+
+    elements.sentRequestCount.textContent = requests.length;
+
+    list.innerHTML = requests.map(req => `
+        <div class="request-item" data-friendship-id="${req.friendshipId}">
+            <div class="friend-avatar">${getInitials(req.name)}</div>
+            <div class="friend-info">
+                <div class="friend-name">${req.name}</div>
+                <div class="friend-id">@${req.username}</div>
+            </div>
+            <button class="request-cancel-btn" aria-label="취소">
+                <i class="ph ph-x"></i>
+                <span>취소</span>
+            </button>
+        </div>
+    `).join('');
+
+    list.querySelectorAll('.request-cancel-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const friendshipId = btn.closest('.request-item').dataset.friendshipId;
+            handleCancelRequest(friendshipId);
+        });
+    });
+}
+
+function updateRequestBadges() {
+    const receivedCount = state.pendingRequests.received.length;
+
+    // Badge on Account tab
+    if (receivedCount > 0) {
+        elements.accountRequestBadge.textContent = receivedCount;
+        elements.accountRequestBadge.style.display = 'inline-flex';
+    } else {
+        elements.accountRequestBadge.style.display = 'none';
+    }
+}
+
+// ============================================
+// Friend Request Handlers
+// ============================================
+async function handleAcceptRequest(friendshipId) {
+    const user = getCurrentUser();
+    if (!user) return;
+
+    try {
+        await apiAcceptFriendRequest(user.id, friendshipId);
+        showToast('친구 요청을 수락했습니다', 'success');
+
+        await loadPendingRequests();
+        await loadFriends();
+        await loadFriendPhotos();
+        elements.friendCount.textContent = state.friends.length;
+        setupFriendPhotosSubscription();
+    } catch (error) {
+        console.error('Failed to accept request:', error);
+        showToast('친구 요청 수락에 실패했습니다', 'error');
+    }
+}
+
+async function handleRejectRequest(friendshipId) {
+    const user = getCurrentUser();
+    if (!user) return;
+
+    try {
+        await apiRejectFriendRequest(user.id, friendshipId);
+        showToast('친구 요청을 거절했습니다', 'info');
+        await loadPendingRequests();
+    } catch (error) {
+        console.error('Failed to reject request:', error);
+        showToast('친구 요청 거절에 실패했습니다', 'error');
+    }
+}
+
+async function handleCancelRequest(friendshipId) {
+    const user = getCurrentUser();
+    if (!user) return;
+
+    try {
+        await apiCancelFriendRequest(user.id, friendshipId);
+        showToast('친구 요청을 취소했습니다', 'info');
+        await loadPendingRequests();
+    } catch (error) {
+        console.error('Failed to cancel request:', error);
+        showToast('친구 요청 취소에 실패했습니다', 'error');
+    }
+}
+
 function confirmRemoveFriend(friendId) {
     const friend = state.friends.find(f => f.id === friendId);
     if (!friend) return;
@@ -2362,8 +2558,7 @@ async function handleFriendSearch() {
     try {
         const results = await searchUsers(searchTerm);
 
-        // Filter out current user and existing friends
-        const friendIds = state.friends.map(f => f.id);
+        // Filter out current user
         const filteredResults = results.filter(u => u.id !== user.id);
 
         if (filteredResults.length === 0) {
@@ -2376,8 +2571,37 @@ async function handleFriendSearch() {
             return;
         }
 
+        // Batch check friendship statuses
+        const otherIds = filteredResults.map(u => u.id);
+        const statusMap = await getFriendshipStatuses(user.id, otherIds);
+        const friendIds = state.friends.map(f => f.id);
+
         elements.friendSearchResults.innerHTML = filteredResults.map(u => {
             const isFriend = friendIds.includes(u.id);
+            const relationship = statusMap[u.id];
+
+            let buttonHtml;
+            if (isFriend) {
+                buttonHtml = `<button class="btn btn-secondary added" disabled>
+                    <i class="ph ph-check"></i><span>친구</span>
+                </button>`;
+            } else if (relationship?.status === 'pending' && relationship.direction === 'sent') {
+                buttonHtml = `<button class="btn btn-secondary requested" disabled>
+                    <i class="ph ph-clock"></i><span>요청됨</span>
+                </button>`;
+            } else if (relationship?.status === 'pending' && relationship.direction === 'received') {
+                buttonHtml = `<button class="btn btn-primary accept-in-search-btn"
+                    data-friendship-id="${relationship.friendshipId}"
+                    data-user-name="${u.name}">
+                    <i class="ph ph-check"></i><span>수락</span>
+                </button>`;
+            } else {
+                buttonHtml = `<button class="btn btn-primary add-friend-btn"
+                    data-user-id="${u.id}" data-user-name="${u.name}">
+                    <i class="ph ph-user-plus"></i><span>추가</span>
+                </button>`;
+            }
+
             return `
                 <div class="search-result-item" data-user-id="${u.id}">
                     <div class="search-result-avatar">${getInitials(u.name)}</div>
@@ -2385,26 +2609,29 @@ async function handleFriendSearch() {
                         <div class="search-result-name">${u.name}</div>
                         <div class="search-result-id">@${u.username}</div>
                     </div>
-                    ${isFriend
-                        ? `<button class="btn btn-secondary added" disabled>
-                            <i class="ph ph-check"></i>
-                            <span>친구</span>
-                           </button>`
-                        : `<button class="btn btn-primary add-friend-btn" data-user-id="${u.id}" data-user-name="${u.name}">
-                            <i class="ph ph-user-plus"></i>
-                            <span>추가</span>
-                           </button>`
-                    }
+                    ${buttonHtml}
                 </div>
             `;
         }).join('');
 
         // Add click handlers for add friend buttons
         elements.friendSearchResults.querySelectorAll('.add-friend-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                const userId = btn.dataset.userId;
-                const userName = btn.dataset.userName;
-                await addFriend(userId, userName, btn);
+            btn.addEventListener('click', async () => {
+                const friendId = btn.dataset.userId;
+                const friendName = btn.dataset.userName;
+                await sendFriendRequestFromSearch(friendId, friendName, btn);
+            });
+        });
+
+        // Add click handlers for accept buttons in search results
+        elements.friendSearchResults.querySelectorAll('.accept-in-search-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const friendshipId = btn.dataset.friendshipId;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="ph-fill ph-circle-notch" style="animation: spin 1s linear infinite;"></i>';
+                await handleAcceptRequest(friendshipId);
+                // Refresh search results
+                handleFriendSearch();
             });
         });
     } catch (error) {
@@ -2419,7 +2646,7 @@ async function handleFriendSearch() {
     }
 }
 
-async function addFriend(friendId, friendName, buttonElement) {
+async function sendFriendRequestFromSearch(friendId, friendName, buttonElement) {
     const user = getCurrentUser();
     if (!user) {
         showToast('로그인이 필요합니다', 'error');
@@ -2431,30 +2658,30 @@ async function addFriend(friendId, friendName, buttonElement) {
     buttonElement.innerHTML = '<i class="ph-fill ph-circle-notch" style="animation: spin 1s linear infinite;"></i>';
 
     try {
-        await apiAddFriend(user.id, friendId);
+        await apiSendFriendRequest(user.id, friendId);
 
-        // Update button to show added state
+        // Update button to show "요청됨" state
         buttonElement.classList.remove('btn-primary');
-        buttonElement.classList.add('btn-secondary', 'added');
-        buttonElement.innerHTML = '<i class="ph ph-check"></i><span>친구</span>';
+        buttonElement.classList.add('btn-secondary', 'requested');
+        buttonElement.innerHTML = '<i class="ph ph-clock"></i><span>요청됨</span>';
 
-        // Reload friends list
-        await loadFriends();
-        await loadFriendPhotos();
+        // Reload pending requests
+        await loadPendingRequests();
 
-        // Update friend count
-        elements.friendCount.textContent = state.friends.length;
-
-        showToast(`${friendName}님을 친구로 추가했습니다`, 'success');
+        showToast(`${friendName}님에게 친구 요청을 보냈습니다`, 'success');
     } catch (error) {
-        console.error('Failed to add friend:', error);
+        console.error('Failed to send friend request:', error);
         buttonElement.disabled = false;
         buttonElement.innerHTML = '<i class="ph ph-user-plus"></i><span>추가</span>';
 
         if (error.message === 'Already friends') {
             showToast('이미 친구입니다', 'warning');
+        } else if (error.message === 'Request already sent') {
+            showToast('이미 요청을 보냈습니다', 'warning');
+        } else if (error.message === 'They already sent you a request') {
+            showToast('상대방이 이미 요청을 보냈습니다. 받은 요청을 확인하세요.', 'info');
         } else {
-            showToast('친구 추가에 실패했습니다', 'error');
+            showToast('친구 요청에 실패했습니다', 'error');
         }
     }
 }
@@ -2642,6 +2869,7 @@ function setupEventListeners() {
     elements.deleteAccountBtn.addEventListener('click', confirmDeleteAccount);
 
     elements.addFriendBtn.addEventListener('click', openAddFriendModal);
+    elements.sendFriendRequestBtn.addEventListener('click', openAddFriendModal);
 
     // Add Friend Modal
     elements.searchFriendBtn.addEventListener('click', handleFriendSearch);

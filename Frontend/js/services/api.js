@@ -503,55 +503,92 @@ export async function deleteGroup(groupId, userId) {
 }
 
 // ============================================
-// Friends API (Supabase)
+// Friends API (Supabase) - Bidirectional Friend Request System
 // ============================================
 
 /**
- * Get user's friends from Supabase
+ * Get user's accepted friends from Supabase (bidirectional)
+ * Returns friends from both directions where status is 'accepted'
  */
 export async function getFriends(userId) {
-    const { data, error } = await supabase
+    // Get friendships where user is the sender
+    const { data: sentData, error: sentError } = await supabase
         .from('friendships')
         .select(`
             friend_id,
             users!friendships_friend_id_fkey (
-                id,
-                username,
-                user_id,
-                avatar_url
+                id, username, user_id, avatar_url
             )
         `)
-        .eq('user_id', userId);
+        .eq('user_id', userId)
+        .eq('status', 'accepted');
 
-    if (error) {
-        throw new ApiError(500, error.message);
-    }
+    // Get friendships where user is the receiver
+    const { data: receivedData, error: receivedError } = await supabase
+        .from('friendships')
+        .select(`
+            user_id,
+            users!friendships_user_id_fkey (
+                id, username, user_id, avatar_url
+            )
+        `)
+        .eq('friend_id', userId)
+        .eq('status', 'accepted');
 
-    return data.map(f => ({
-        id: f.friend_id,
-        name: f.users?.username || 'Unknown',
-        username: f.users?.user_id || '',
-        avatar: f.users?.avatar_url || null,
-    }));
+    if (sentError) throw new ApiError(500, sentError.message);
+    if (receivedError) throw new ApiError(500, receivedError.message);
+
+    const friends = [
+        ...(sentData || []).map(f => ({
+            id: f.friend_id,
+            name: f.users?.username || 'Unknown',
+            username: f.users?.user_id || '',
+            avatar: f.users?.avatar_url || null,
+        })),
+        ...(receivedData || []).map(f => ({
+            id: f.user_id,
+            name: f.users?.username || 'Unknown',
+            username: f.users?.user_id || '',
+            avatar: f.users?.avatar_url || null,
+        })),
+    ];
+
+    // Deduplicate by id
+    const seen = new Set();
+    return friends.filter(f => {
+        if (seen.has(f.id)) return false;
+        seen.add(f.id);
+        return true;
+    });
 }
 
 /**
- * Get friends' photos from Supabase
+ * Get friends' photos from Supabase (bidirectional)
  */
 export async function getFriendsPhotos(userId, params = {}) {
-    // First get friend IDs
-    const { data: friendships, error: friendError } = await supabase
+    // Get accepted friend IDs (both directions)
+    const { data: sent, error: e1 } = await supabase
         .from('friendships')
         .select('friend_id')
-        .eq('user_id', userId);
+        .eq('user_id', userId)
+        .eq('status', 'accepted');
 
-    if (friendError) {
-        throw new ApiError(500, friendError.message);
-    }
+    const { data: received, error: e2 } = await supabase
+        .from('friendships')
+        .select('user_id')
+        .eq('friend_id', userId)
+        .eq('status', 'accepted');
 
-    const friendIds = friendships.map(f => f.friend_id);
+    if (e1) throw new ApiError(500, e1.message);
+    if (e2) throw new ApiError(500, e2.message);
 
-    if (friendIds.length === 0) {
+    const friendIds = [
+        ...(sent || []).map(f => f.friend_id),
+        ...(received || []).map(f => f.user_id),
+    ];
+    const uniqueFriendIds = [...new Set(friendIds)];
+
+    if (uniqueFriendIds.length === 0) {
         return [];
     }
 
@@ -562,7 +599,7 @@ export async function getFriendsPhotos(userId, params = {}) {
             *,
             users!photos_user_id_fkey (username)
         `)
-        .in('user_id', friendIds)
+        .in('user_id', uniqueFriendIds)
         .order('date_taken', { ascending: false });
 
     // Pagination - use range for offset+limit, otherwise just limit
@@ -591,10 +628,10 @@ export async function getFriendsPhotos(userId, params = {}) {
 }
 
 /**
- * Add friend in Supabase
+ * Send a friend request (creates pending friendship)
  */
-export async function addFriend(userId, friendId) {
-    // Check if friend exists
+export async function sendFriendRequest(userId, friendId) {
+    // Check if friend user exists
     const { data: friendUser, error: userError } = await supabase
         .from('users')
         .select('id')
@@ -605,24 +642,38 @@ export async function addFriend(userId, friendId) {
         throw new ApiError(404, 'User not found');
     }
 
-    // Check if already friends
-    const { data: existing } = await supabase
+    // Check if friendship exists in EITHER direction
+    const { data: existing1 } = await supabase
         .from('friendships')
-        .select('id')
+        .select('id, status')
         .eq('user_id', userId)
         .eq('friend_id', friendId)
-        .single();
+        .maybeSingle();
 
-    if (existing) {
-        throw new ApiError(400, 'Already friends');
+    if (existing1) {
+        if (existing1.status === 'accepted') throw new ApiError(400, 'Already friends');
+        throw new ApiError(400, 'Request already sent');
     }
 
-    // Add friendship
+    const { data: existing2 } = await supabase
+        .from('friendships')
+        .select('id, status')
+        .eq('user_id', friendId)
+        .eq('friend_id', userId)
+        .maybeSingle();
+
+    if (existing2) {
+        if (existing2.status === 'accepted') throw new ApiError(400, 'Already friends');
+        throw new ApiError(400, 'They already sent you a request');
+    }
+
+    // Insert with pending status
     const { error } = await supabase
         .from('friendships')
         .insert({
             user_id: userId,
             friend_id: friendId,
+            status: 'pending',
         });
 
     if (error) {
@@ -630,6 +681,146 @@ export async function addFriend(userId, friendId) {
     }
 
     return { success: true };
+}
+
+/**
+ * Accept a friend request (only the receiver can accept)
+ */
+export async function acceptFriendRequest(userId, friendshipId) {
+    const { error } = await supabase
+        .from('friendships')
+        .update({ status: 'accepted' })
+        .eq('id', friendshipId)
+        .eq('friend_id', userId)
+        .eq('status', 'pending');
+
+    if (error) {
+        throw new ApiError(500, error.message);
+    }
+
+    return { success: true };
+}
+
+/**
+ * Reject a friend request (only the receiver can reject)
+ */
+export async function rejectFriendRequest(userId, friendshipId) {
+    const { error } = await supabase
+        .from('friendships')
+        .delete()
+        .eq('id', friendshipId)
+        .eq('friend_id', userId);
+
+    if (error) {
+        throw new ApiError(500, error.message);
+    }
+
+    return { success: true };
+}
+
+/**
+ * Cancel a sent friend request (only the sender can cancel)
+ */
+export async function cancelFriendRequest(userId, friendshipId) {
+    const { error } = await supabase
+        .from('friendships')
+        .delete()
+        .eq('id', friendshipId)
+        .eq('user_id', userId)
+        .eq('status', 'pending');
+
+    if (error) {
+        throw new ApiError(500, error.message);
+    }
+
+    return { success: true };
+}
+
+/**
+ * Get pending friend requests (both sent and received)
+ */
+export async function getPendingRequests(userId) {
+    // Received requests (others sent to me)
+    const { data: received, error: e1 } = await supabase
+        .from('friendships')
+        .select(`
+            id,
+            user_id,
+            created_at,
+            users!friendships_user_id_fkey (
+                id, username, user_id, avatar_url
+            )
+        `)
+        .eq('friend_id', userId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+
+    // Sent requests (I sent to others)
+    const { data: sent, error: e2 } = await supabase
+        .from('friendships')
+        .select(`
+            id,
+            friend_id,
+            created_at,
+            users!friendships_friend_id_fkey (
+                id, username, user_id, avatar_url
+            )
+        `)
+        .eq('user_id', userId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+
+    if (e1) throw new ApiError(500, e1.message);
+    if (e2) throw new ApiError(500, e2.message);
+
+    return {
+        received: (received || []).map(r => ({
+            friendshipId: r.id,
+            userId: r.user_id,
+            name: r.users?.username || 'Unknown',
+            username: r.users?.user_id || '',
+            avatar: r.users?.avatar_url || null,
+            createdAt: r.created_at,
+        })),
+        sent: (sent || []).map(s => ({
+            friendshipId: s.id,
+            userId: s.friend_id,
+            name: s.users?.username || 'Unknown',
+            username: s.users?.user_id || '',
+            avatar: s.users?.avatar_url || null,
+            createdAt: s.created_at,
+        })),
+    };
+}
+
+/**
+ * Get friendship statuses for multiple users (batch query for search results)
+ */
+export async function getFriendshipStatuses(userId, otherUserIds) {
+    if (!otherUserIds || otherUserIds.length === 0) return {};
+
+    // Check sent requests/friendships
+    const { data: sent } = await supabase
+        .from('friendships')
+        .select('id, friend_id, status')
+        .eq('user_id', userId)
+        .in('friend_id', otherUserIds);
+
+    // Check received requests/friendships
+    const { data: received } = await supabase
+        .from('friendships')
+        .select('id, user_id, status')
+        .eq('friend_id', userId)
+        .in('user_id', otherUserIds);
+
+    const statusMap = {};
+    (sent || []).forEach(r => {
+        statusMap[r.friend_id] = { friendshipId: r.id, status: r.status, direction: 'sent' };
+    });
+    (received || []).forEach(r => {
+        statusMap[r.user_id] = { friendshipId: r.id, status: r.status, direction: 'received' };
+    });
+    return statusMap;
 }
 
 /**
@@ -655,17 +846,27 @@ export async function searchUsers(searchTerm) {
 }
 
 /**
- * Remove friend from Supabase
+ * Remove an accepted friend (bidirectional - tries both directions)
  */
 export async function removeFriend(userId, friendId) {
-    const { error } = await supabase
+    // Try deleting where user is user_id
+    const { error: error1 } = await supabase
         .from('friendships')
         .delete()
         .eq('user_id', userId)
-        .eq('friend_id', friendId);
+        .eq('friend_id', friendId)
+        .eq('status', 'accepted');
 
-    if (error) {
-        throw new ApiError(500, error.message);
+    // Try deleting where user is friend_id
+    const { error: error2 } = await supabase
+        .from('friendships')
+        .delete()
+        .eq('user_id', friendId)
+        .eq('friend_id', userId)
+        .eq('status', 'accepted');
+
+    if (error1 && error2) {
+        throw new ApiError(500, error1.message);
     }
 
     return { success: true };
@@ -861,11 +1062,21 @@ export async function getUserStats(userId) {
         .select('*', { count: 'exact', head: true })
         .eq('user_id', userId);
 
-    // Get friend count
-    const { count: friendCount, error: friendError } = await supabase
+    // Get friend count (bidirectional - accepted only)
+    const { count: sentCount, error: sentFriendError } = await supabase
         .from('friendships')
         .select('*', { count: 'exact', head: true })
-        .eq('user_id', userId);
+        .eq('user_id', userId)
+        .eq('status', 'accepted');
+
+    const { count: receivedCount, error: receivedFriendError } = await supabase
+        .from('friendships')
+        .select('*', { count: 'exact', head: true })
+        .eq('friend_id', userId)
+        .eq('status', 'accepted');
+
+    const friendCount = (sentCount || 0) + (receivedCount || 0);
+    const friendError = sentFriendError || receivedFriendError;
 
     // Get storage used from user's folder
     let storageUsed = '0 MB';
@@ -938,7 +1149,7 @@ export function subscribeToRealtimeChanges(userId, callbacks = {}) {
         );
     }
 
-    // Subscribe to friendships table changes
+    // Subscribe to friendships table changes (as sender)
     if (callbacks.onFriendshipsChange) {
         channel.on(
             'postgres_changes',
@@ -949,7 +1160,22 @@ export function subscribeToRealtimeChanges(userId, callbacks = {}) {
                 filter: `user_id=eq.${userId}`
             },
             (payload) => {
-                console.log('👥 Friendships change detected:', payload.eventType);
+                console.log('👥 Friendships change (sent) detected:', payload.eventType);
+                callbacks.onFriendshipsChange(payload);
+            }
+        );
+
+        // Subscribe to friendships table changes (as receiver)
+        channel.on(
+            'postgres_changes',
+            {
+                event: '*',
+                schema: 'public',
+                table: 'friendships',
+                filter: `friend_id=eq.${userId}`
+            },
+            (payload) => {
+                console.log('👥 Friendships change (received) detected:', payload.eventType);
                 callbacks.onFriendshipsChange(payload);
             }
         );
@@ -1091,7 +1317,12 @@ export default {
     // Friends
     getFriends,
     getFriendsPhotos,
-    addFriend,
+    sendFriendRequest,
+    acceptFriendRequest,
+    rejectFriendRequest,
+    cancelFriendRequest,
+    getPendingRequests,
+    getFriendshipStatuses,
     removeFriend,
     searchUsers,
 

@@ -70,9 +70,15 @@ Photo sharing web app with photo import, group organization, friend sharing, and
 ### 4. Search & Filter
 - Location (case-insensitive partial match), date range picker
 
-### 5. Social
-- Friends tab (friend photos only), friend list management
-- Add friend modal with user search, "Friend" badge for existing friends
+### 5. Social (Friend Request System)
+- **Friend Request Flow**: Send request → receiver accepts/rejects → mutual friendship established
+- Friends tab (friend photos only from accepted friendships)
+- Add friend modal with user search, shows 4 states: 추가/요청됨/수락/친구
+- Account tab layout (top to bottom): Profile Card → Logout/Delete buttons → Friends List → Received Requests → Sent Requests
+- "받은 친구 요청" (accept/reject) and "보낸 친구 요청" (cancel) always visible below Friends List (show empty state message when no requests)
+- "친구 요청 보내기" button in Sent Requests section header (same as Friends tab add friend button)
+- Badge notification on Account tab for pending received requests
+- Realtime updates for both sender and receiver of friend requests
 
 ### 6. Slideshow
 - Play/Pause, Prev/Next, keyboard shortcuts (Arrow/Space/Escape)
@@ -129,8 +135,11 @@ Photo sharing web app with photo import, group organization, friend sharing, and
 - `photo_id` + `group_id` = Composite PK (N:M relationship)
 
 ### friendships
-- `id`, `user_id`, `friend_id`, `created_at`
+- `id`, `user_id` (requester), `friend_id` (receiver), `status` ('pending'|'accepted'), `created_at`
 - UNIQUE constraint on (user_id, friend_id)
+- Trigger prevents reverse-direction duplicates (if A→B exists, B→A insert is blocked)
+- `status='pending'`: request sent, awaiting acceptance
+- `status='accepted'`: mutual friendship established
 
 **Auto-create user profile trigger** (required for new user registration):
 ```sql
@@ -229,8 +238,14 @@ uploadPhotos(userId, photos), deletePhoto(photoId, userId), updatePhotoGroups(ph
 // Groups
 getGroups(userId), createGroup(userId, name), updateGroup(groupId, userId, name), deleteGroup(groupId, userId)
 
-// Friends
-getFriends(userId), getFriendsPhotos(userId, params), addFriend(userId, friendId)
+// Friends (Bidirectional Friend Request System)
+getFriends(userId), getFriendsPhotos(userId, params)  // Both query accepted friendships in BOTH directions
+sendFriendRequest(userId, friendId)                     // Creates pending friendship (replaces addFriend)
+acceptFriendRequest(userId, friendshipId)               // Receiver accepts → status='accepted'
+rejectFriendRequest(userId, friendshipId)               // Receiver rejects → row deleted
+cancelFriendRequest(userId, friendshipId)               // Sender cancels → row deleted
+getPendingRequests(userId)                              // Returns { received: [...], sent: [...] }
+getFriendshipStatuses(userId, otherUserIds)             // Batch status check for search results
 removeFriend(userId, friendId), searchUsers(searchTerm)
 
 // User
@@ -283,8 +298,17 @@ handleSortOrderChange(order)  // Change sort order (asc/desc)
 formatDate(dateString)        // Format date as "YYYY년 M월 D일" (Korean locale)
 formatDateTime(dateString)    // Format datetime as "YYYY-MM-DD HH:mm" (exact time)
 
+// Friend Requests
+loadPendingRequests()              // Load received + sent pending requests
+renderReceivedRequests()           // Render received requests with accept/reject buttons (always visible, shows empty message)
+renderSentRequests()               // Render sent requests with cancel button (always visible, shows empty message)
+handleAcceptRequest(friendshipId)  // Accept a received friend request
+handleRejectRequest(friendshipId)  // Reject a received friend request
+handleCancelRequest(friendshipId)  // Cancel a sent friend request
+updateRequestBadges()              // Update badge count on Account tab
+
 // Realtime (auto-called, no manual invocation needed)
-setupRealtimeSubscriptions()       // Setup live DB sync (called after login)
+setupRealtimeSubscriptions()       // Setup live DB sync (called after login), listens BOTH directions for friendships
 setupFriendPhotosSubscription()    // Subscribe to friends' uploads
 cleanupRealtimeSubscriptions()     // Cleanup on logout
 ```
@@ -396,10 +420,10 @@ confirmDeleteAccount() → handleDeleteAccount() → deleteAccount() (auth.js)
 
 ### Table Policies (supabase_rls_setup.sql)
 - **users**: All can read, only self can create/update/delete
-- **photos**: Own photos CRUD, can read friend photos
+- **photos**: Own photos CRUD, can read friend photos (accepted friendships only, bidirectional)
 - **groups**: Own groups only
 - **photo_groups**: Own photo-group links only
-- **friendships**: Own relationships only (+ delete as friend_id for account deletion)
+- **friendships**: SELECT both directions (user_id OR friend_id), INSERT as sender only, UPDATE as receiver only (accept), DELETE as sender or receiver
 
 ### Storage Policies
 - **photos bucket**: Public
@@ -431,6 +455,8 @@ confirmDeleteAccount() → handleDeleteAccount() → deleteAccount() (auth.js)
 - **Friends tab empty state** - Different empty message for Friends tab vs My Photos tab
 - **Add Friend button moved** - Relocated from Account tab to Friends tab header for better UX
 - **Supabase Realtime** - Live database sync without browser refresh (photos, groups, friendships auto-update)
+- **Friend Request System** - Bidirectional friend requests with accept/reject/cancel; pending requests in Account tab; badge notifications; search shows request status
+- **Account tab layout redesign** - Reordered: Profile Card → Logout/Delete → Friends List → Received Requests → Sent Requests. Request sections always visible with empty state messages. "친구 요청 보내기" button added to Sent Requests header.
 
 ### Required Setup
 Run these in **Supabase SQL Editor** before using the app:
@@ -482,6 +508,11 @@ Run these in **Supabase SQL Editor** before using the app:
      - `groups` ✅
      - `photo_groups` ✅
    - Click **Save**
+
+6. **Friend request system migration** (for bidirectional friend requests)
+   - Run `supabase_friend_request_migration.sql` in Supabase SQL Editor
+   - This adds `status` column to friendships, updates RLS policies, and creates duplicate prevention trigger
+   - Existing friendships are auto-migrated to `status='accepted'`
 
 ---
 
@@ -542,6 +573,9 @@ The app uses Korean UI text. Key terminology:
 | No Photos (My Photos) | 사진이 없습니다 | Empty state title |
 | No Photos hint (My Photos) | 불러오기 버튼을 눌러 사진을 추가하거나 필터를 조정해보세요. | Empty state description for My Photos tab |
 | No Photos hint (Friends) | 친구를 추가하거나<br>친구가 사진을 업로드할 때까지 기다려주세요. | Empty state description for Friends tab |
+| No Received Requests | 받은 친구 요청이 없습니다 | Empty state for received requests section |
+| No Sent Requests | 보낸 친구 요청이 없습니다 | Empty state for sent requests section |
+| Send Friend Request | 친구 요청 보내기 | Button in sent requests section header |
 
 **Note**: The word "동기화" (sync) is NOT used in the UI. Use "불러오기" (import/load) or "스캔" (scan) instead.
 

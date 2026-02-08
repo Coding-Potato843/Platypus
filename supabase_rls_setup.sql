@@ -68,13 +68,17 @@ ON public.photos FOR SELECT
 TO authenticated
 USING (auth.uid() = user_id);
 
--- 친구의 사진 조회 (친구 관계가 있는 경우)
+-- 친구의 사진 조회 (양방향 accepted 친구 관계만 허용)
 CREATE POLICY "Users can view friends photos"
 ON public.photos FOR SELECT
 TO authenticated
 USING (
   user_id IN (
-    SELECT friend_id FROM public.friendships WHERE user_id = auth.uid()
+    SELECT friend_id FROM public.friendships
+    WHERE user_id = auth.uid() AND status = 'accepted'
+    UNION
+    SELECT user_id FROM public.friendships
+    WHERE friend_id = auth.uid() AND status = 'accepted'
   )
 );
 
@@ -166,21 +170,22 @@ USING (
 );
 
 -- ============================================
--- 6. friendships 테이블 RLS 정책
+-- 6. friendships 테이블 RLS 정책 (친구 요청 시스템)
 -- ============================================
 -- 기존 정책 삭제 (있으면)
 DROP POLICY IF EXISTS "Users can view own friendships" ON public.friendships;
 DROP POLICY IF EXISTS "Users can insert own friendships" ON public.friendships;
+DROP POLICY IF EXISTS "Users can update friendships as receiver" ON public.friendships;
 DROP POLICY IF EXISTS "Users can delete own friendships" ON public.friendships;
 DROP POLICY IF EXISTS "Users can delete friendships as friend" ON public.friendships;
 
--- 자신의 친구 관계만 조회
+-- 양방향 친구 관계 조회 (보낸 요청 + 받은 요청 모두 조회 가능)
 CREATE POLICY "Users can view own friendships"
 ON public.friendships FOR SELECT
 TO authenticated
-USING (auth.uid() = user_id);
+USING (auth.uid() = user_id OR auth.uid() = friend_id);
 
--- 자신의 친구 관계만 생성 (자기 자신을 친구로 추가 불가)
+-- 자신이 요청자(user_id)인 친구 요청만 생성 가능
 CREATE POLICY "Users can insert own friendships"
 ON public.friendships FOR INSERT
 TO authenticated
@@ -189,13 +194,20 @@ WITH CHECK (
   AND auth.uid() != friend_id
 );
 
--- 자신의 친구 관계만 삭제
+-- 받은 사람(friend_id)만 상태 업데이트 가능 (수락)
+CREATE POLICY "Users can update friendships as receiver"
+ON public.friendships FOR UPDATE
+TO authenticated
+USING (auth.uid() = friend_id)
+WITH CHECK (auth.uid() = friend_id);
+
+-- 요청자(user_id)가 자신의 요청 삭제 (취소)
 CREATE POLICY "Users can delete own friendships"
 ON public.friendships FOR DELETE
 TO authenticated
 USING (auth.uid() = user_id);
 
--- 자신이 friend로 등록된 관계 삭제 (회원탈퇴 시 필요)
+-- 받은 사람(friend_id)이 요청 삭제 (거절) + 회원탈퇴 시 정리
 CREATE POLICY "Users can delete friendships as friend"
 ON public.friendships FOR DELETE
 TO authenticated

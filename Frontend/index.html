@@ -195,6 +195,7 @@
             <button class="tab-btn" data-tab="account">
                 <i class="ph ph-user-circle"></i>
                 <span>계정</span>
+                <span class="tab-badge" id="accountRequestBadge" style="display: none;"></span>
             </button>
         </nav>
 
@@ -326,6 +327,18 @@
                         </div>
                     </div>
 
+                    <!-- Account Actions -->
+                    <div class="account-actions">
+                        <button class="btn btn-danger btn-full" id="logoutBtn">
+                            <i class="ph ph-sign-out"></i>
+                            <span>로그아웃</span>
+                        </button>
+                        <button class="btn btn-danger-outline btn-full" id="deleteAccountBtn">
+                            <i class="ph ph-user-minus"></i>
+                            <span>회원탈퇴</span>
+                        </button>
+                    </div>
+
                     <!-- Friends List -->
                     <div class="friends-list-section">
                         <h3 class="section-title">
@@ -337,16 +350,30 @@
                         </div>
                     </div>
 
-                    <!-- Account Actions -->
-                    <div class="account-actions">
-                        <button class="btn btn-danger btn-full" id="logoutBtn">
-                            <i class="ph ph-sign-out"></i>
-                            <span>로그아웃</span>
-                        </button>
-                        <button class="btn btn-danger-outline btn-full" id="deleteAccountBtn">
-                            <i class="ph ph-user-minus"></i>
-                            <span>회원탈퇴</span>
-                        </button>
+                    <!-- Received Friend Requests (always visible) -->
+                    <div class="friends-list-section" id="receivedRequestsSection">
+                        <h3 class="section-title">
+                            <i class="ph ph-user-circle-check"></i>
+                            <span>받은 친구 요청</span>
+                            <span class="request-count-badge" id="receivedRequestCount"></span>
+                        </h3>
+                        <div class="request-list" id="receivedRequestsList">
+                        </div>
+                    </div>
+
+                    <!-- Sent Friend Requests (always visible) -->
+                    <div class="friends-list-section" id="sentRequestsSection">
+                        <h3 class="section-title">
+                            <i class="ph ph-paper-plane-tilt"></i>
+                            <span>보낸 친구 요청</span>
+                            <span class="request-count-badge" id="sentRequestCount"></span>
+                            <button class="btn btn-primary btn-sm" id="sendFriendRequestBtn">
+                                <i class="ph ph-user-plus"></i>
+                                <span>친구 요청 보내기</span>
+                            </button>
+                        </h3>
+                        <div class="request-list" id="sentRequestsList">
+                        </div>
                     </div>
                 </div>
             </section>

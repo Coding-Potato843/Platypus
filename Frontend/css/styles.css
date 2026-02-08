@@ -446,6 +446,7 @@ body {
 }
 
 .tab-btn {
+    position: relative;
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -908,6 +909,13 @@ body {
     color: var(--primary-400);
 }
 
+.section-title .btn {
+    margin-left: auto;
+    font-size: 0.75rem;
+    padding: 0.35rem 0.75rem;
+    gap: 0.3rem;
+}
+
 .friends-list {
     display: flex;
     flex-direction: column;
@@ -968,6 +976,130 @@ body {
 .friend-remove-btn:hover {
     color: var(--danger);
     background: rgba(239, 68, 68, 0.1);
+}
+
+/* Friend Request Lists */
+.request-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.request-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-sm);
+    border-radius: var(--border-radius-md);
+    transition: background var(--transition-fast);
+}
+
+.request-item:hover {
+    background: var(--bg-elevated);
+}
+
+.request-item .friend-avatar {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+}
+
+.request-actions {
+    display: flex;
+    gap: var(--spacing-xs);
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.request-accept-btn {
+    background: none;
+    border: none;
+    color: #10b981;
+    cursor: pointer;
+    padding: var(--spacing-xs);
+    border-radius: var(--border-radius-md);
+    font-size: 1.5rem;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.request-accept-btn:hover {
+    background: rgba(16, 185, 129, 0.15);
+    transform: scale(1.1);
+}
+
+.request-reject-btn {
+    background: none;
+    border: none;
+    color: var(--danger);
+    cursor: pointer;
+    padding: var(--spacing-xs);
+    border-radius: var(--border-radius-md);
+    font-size: 1.5rem;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.request-reject-btn:hover {
+    background: rgba(239, 68, 68, 0.15);
+    transform: scale(1.1);
+}
+
+.request-cancel-btn {
+    background: none;
+    border: 1px solid var(--border-color);
+    color: var(--text-tertiary);
+    cursor: pointer;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--border-radius-md);
+    font-size: 0.8rem;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    margin-left: auto;
+}
+
+.request-cancel-btn:hover {
+    color: var(--danger);
+    border-color: var(--danger);
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.request-count-badge {
+    background: var(--primary-500);
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 700;
+    min-width: 20px;
+    height: 20px;
+    border-radius: var(--border-radius-full);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 6px;
+    margin-left: var(--spacing-xs);
+}
+
+.tab-badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: var(--danger);
+    color: white;
+    font-size: 0.6rem;
+    font-weight: 700;
+    min-width: 16px;
+    height: 16px;
+    border-radius: var(--border-radius-full);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
 }
 
 /* Account Actions */
@@ -2287,6 +2419,17 @@ body {
 }
 
 .search-result-item .btn.added:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+.search-result-item .btn.requested {
+    background: var(--slate-600);
+    color: var(--text-tertiary);
+    cursor: default;
+}
+
+.search-result-item .btn.requested:hover {
     transform: none;
     box-shadow: none;
 }
