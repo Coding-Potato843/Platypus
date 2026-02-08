@@ -42,18 +42,50 @@ export async function initAuth() {
 }
 
 /**
+ * Generate a unique user_id based on display name.
+ * Converts to lowercase alphanumeric/underscore, appends random suffix,
+ * and retries if a collision occurs.
+ */
+async function generateUniqueUserId(displayName) {
+    // Convert display name to a base ID (lowercase, alphanumeric and underscore only)
+    const base = displayName
+        .toLowerCase()
+        .replace(/[^a-z0-9_]/g, '')
+        .slice(0, 12) || 'user';
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+        const suffix = Math.random().toString(36).slice(2, 6);
+        const candidate = `${base}_${suffix}`;
+
+        const { data } = await supabase
+            .from('users')
+            .select('id')
+            .eq('user_id', candidate)
+            .maybeSingle();
+
+        if (!data) return candidate;
+    }
+
+    // Fallback: use timestamp for guaranteed uniqueness
+    return `${base}_${Date.now().toString(36)}`;
+}
+
+/**
  * Register new user
  */
-export async function register(email, password, username, displayName) {
+export async function register(email, password, displayName) {
     try {
-        // 1. Sign up with Supabase Auth
+        // 1. Generate unique user_id
+        const userId = await generateUniqueUserId(displayName);
+
+        // 2. Sign up with Supabase Auth
         const { data, error } = await supabase.auth.signUp({
             email,
             password,
             options: {
                 data: {
-                    username: username,
-                    display_name: displayName || username,
+                    username: userId,
+                    display_name: displayName,
                 }
             }
         });
@@ -71,21 +103,20 @@ export async function register(email, password, username, displayName) {
             throw new AuthError('이미 사용 중인 이메일입니다.');
         }
 
-        // 2. Update user profile in public.users table
-        // The handle_new_user trigger creates the record first using email prefix,
-        // so we upsert to overwrite with the actual username provided during signup.
+        // 3. Update user profile in public.users table
+        // The handle_new_user trigger creates the record first,
+        // so we upsert to overwrite with the actual display name and generated user_id.
         const { error: profileError } = await supabase
             .from('users')
             .upsert({
                 id: data.user.id,
                 email: email,
-                username: displayName || username,
-                user_id: username,
+                username: displayName,
+                user_id: userId,
             }, { onConflict: 'id' });
 
         if (profileError) {
             console.error('Profile creation error:', profileError);
-            // Don't throw - auth succeeded, profile can be created later
         }
 
         currentUser = data.user;

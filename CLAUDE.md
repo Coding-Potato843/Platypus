@@ -50,6 +50,7 @@ Photo sharing web app with photo import, group organization, friend sharing, and
 ### 1. Authentication
 - Email/password registration & login with session persistence
 - Validation: Email format (duplicate check), Password (8+ chars, lower/number/special char), Username (3-20 chars, Korean/alphanumeric/_)
+- **User ID auto-generation**: `user_id` is auto-generated from display name with random suffix (e.g., "홍길동" → `@_a3x9`). Users only enter a display name during signup.
 - Profile: name, username, email, avatar, join date, last scan date, stats
 - **Account Deletion**: Deletes all user data (photos, groups, friendships) with confirmation modal
 
@@ -260,7 +261,7 @@ unsubscribeFromRealtime()                       // Cleanup all subscriptions (ca
 
 ### auth.js
 ```javascript
-initAuth(), login(email, password), register(email, password, username, displayName)
+initAuth(), login(email, password), register(email, password, displayName)
 logout(), deleteAccount(), getCurrentUser(), getCurrentUserProfile(), onAuthStateChange(callback)
 validateEmail(email), validatePassword(password), validateUsername(username)
 ```
@@ -457,6 +458,7 @@ confirmDeleteAccount() → handleDeleteAccount() → deleteAccount() (auth.js)
 - **Supabase Realtime** - Live database sync without browser refresh (photos, groups, friendships auto-update)
 - **Friend Request System** - Bidirectional friend requests with accept/reject/cancel; pending requests in Account tab; badge notifications; search shows request status
 - **Account tab layout redesign** - Reordered: Profile Card → Logout/Delete → Friends List → Received Requests → Sent Requests. Request sections always visible with empty state messages. "친구 요청 보내기" button added to Sent Requests header.
+- **User ID auto-generation** - `register()` now takes 3 params (email, password, displayName). `user_id` is auto-generated from display name with random suffix. `generateUniqueUserId()` checks DB for collisions. Trigger updated to use `raw_user_meta_data`. Users only enter display name during signup.
 
 ### Required Setup
 Run these in **Supabase SQL Editor** before using the app:

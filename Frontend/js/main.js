@@ -813,7 +813,7 @@ async function handleSignup(e) {
     showLoading('회원가입 중...');
 
     try {
-        const user = await register(email, password, username, username);
+        const user = await register(email, password, username);
         hideLoading();
         closeAuthModal();
         showToast('회원가입이 완료되었습니다! 이메일을 확인해주세요.', 'success');
@@ -1053,7 +1053,7 @@ async function handleAuthPageSignup(e) {
     showLoading('회원가입 중...');
 
     try {
-        const user = await register(email, password, username, username);
+        const user = await register(email, password, username);
         hideLoading();
         showToast('회원가입이 완료되었습니다! 이메일을 확인해주세요.', 'success');
 
