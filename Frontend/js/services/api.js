@@ -566,39 +566,51 @@ export async function getFriends(userId) {
  * Get friends' photos from Supabase (bidirectional)
  */
 export async function getFriendsPhotos(userId, params = {}) {
-    // Get accepted friend IDs (both directions)
+    // Get accepted friend IDs with usernames (both directions)
     const { data: sent, error: e1 } = await supabase
         .from('friendships')
-        .select('friend_id')
+        .select(`
+            friend_id,
+            users!friendships_friend_id_fkey (username)
+        `)
         .eq('user_id', userId)
         .eq('status', 'accepted');
 
     const { data: received, error: e2 } = await supabase
         .from('friendships')
-        .select('user_id')
+        .select(`
+            user_id,
+            users!friendships_user_id_fkey (username)
+        `)
         .eq('friend_id', userId)
         .eq('status', 'accepted');
 
     if (e1) throw new ApiError(500, e1.message);
     if (e2) throw new ApiError(500, e2.message);
 
-    const friendIds = [
-        ...(sent || []).map(f => f.friend_id),
-        ...(received || []).map(f => f.user_id),
-    ];
+    // Build friendId → username map
+    const friendNameMap = {};
+    const friendIds = [];
+
+    (sent || []).forEach(f => {
+        friendIds.push(f.friend_id);
+        friendNameMap[f.friend_id] = f.users?.username || 'Unknown';
+    });
+    (received || []).forEach(f => {
+        friendIds.push(f.user_id);
+        friendNameMap[f.user_id] = f.users?.username || 'Unknown';
+    });
+
     const uniqueFriendIds = [...new Set(friendIds)];
 
     if (uniqueFriendIds.length === 0) {
         return [];
     }
 
-    // Then get their photos
+    // Get photos without FK join on users (avoids dependency on photos_user_id_fkey)
     let query = supabase
         .from('photos')
-        .select(`
-            *,
-            users!photos_user_id_fkey (username)
-        `)
+        .select('*')
         .in('user_id', uniqueFriendIds)
         .order('date_taken', { ascending: false });
 
@@ -623,7 +635,7 @@ export async function getFriendsPhotos(userId, params = {}) {
         created_at: photo.created_at,
         location: photo.location || '알 수 없음',
         groupIds: [],
-        author: photo.users?.username || 'Unknown',
+        author: friendNameMap[photo.user_id] || 'Unknown',
     }));
 }
 

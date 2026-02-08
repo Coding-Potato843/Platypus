@@ -240,7 +240,7 @@ uploadPhotos(userId, photos), deletePhoto(photoId, userId), updatePhotoGroups(ph
 getGroups(userId), createGroup(userId, name), updateGroup(groupId, userId, name), deleteGroup(groupId, userId)
 
 // Friends (Bidirectional Friend Request System)
-getFriends(userId), getFriendsPhotos(userId, params)  // Both query accepted friendships in BOTH directions
+getFriends(userId), getFriendsPhotos(userId, params)  // Both query accepted friendships in BOTH directions; author names resolved via friendships FK join (not photos FK)
 sendFriendRequest(userId, friendId)                     // Creates pending friendship (replaces addFriend)
 acceptFriendRequest(userId, friendshipId)               // Receiver accepts → status='accepted'
 rejectFriendRequest(userId, friendshipId)               // Receiver rejects → row deleted
@@ -459,6 +459,9 @@ confirmDeleteAccount() → handleDeleteAccount() → deleteAccount() (auth.js)
 - **Friend Request System** - Bidirectional friend requests with accept/reject/cancel; pending requests in Account tab; badge notifications; search shows request status
 - **Account tab layout redesign** - Reordered: Profile Card → Logout/Delete → Friends List → Received Requests → Sent Requests. Request sections always visible with empty state messages. "친구 요청 보내기" button added to Sent Requests header.
 - **User ID auto-generation** - `register()` now takes 3 params (email, password, displayName). `user_id` is auto-generated from display name with random suffix. `generateUniqueUserId()` checks DB for collisions. Trigger updated to use `raw_user_meta_data`. Users only enter display name during signup.
+- **Friend photos not loading fix** - Two bugs prevented friend photos from appearing in the Friends tab:
+  1. **Race condition**: `loadPhotos()` and `loadFriendPhotos()` shared a single `isLoadingMore` flag. When called in parallel via `Promise.all` in `loadAllUserData()`, `loadPhotos()` set the flag first, causing `loadFriendPhotos()` to exit immediately. Fixed by splitting into `isLoadingMoreMyPhotos` and `isLoadingMoreFriendPhotos`.
+  2. **Broken FK join**: `getFriendsPhotos()` used `users!photos_user_id_fkey` FK join on the photos table, which fails if the FK constraint doesn't exist. Fixed by resolving author usernames from the friendships FK joins instead (`friendships_friend_id_fkey` / `friendships_user_id_fkey`), and querying photos with plain `select('*')`.
 
 ### Required Setup
 Run these in **Supabase SQL Editor** before using the app:

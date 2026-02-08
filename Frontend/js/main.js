@@ -98,7 +98,7 @@ async function loadPhotos(loadMore = false) {
     const user = getCurrentUser();
     if (!user) return;
 
-    if (state.pagination.isLoadingMore) return;
+    if (state.pagination.isLoadingMoreMyPhotos) return;
 
     try {
         if (!loadMore) {
@@ -108,7 +108,7 @@ async function loadPhotos(loadMore = false) {
             state.photos = [];
         }
 
-        state.pagination.isLoadingMore = true;
+        state.pagination.isLoadingMoreMyPhotos = true;
 
         const photos = await getPhotos(user.id, {
             limit: state.pagination.photosPerPage,
@@ -133,7 +133,7 @@ async function loadPhotos(loadMore = false) {
         console.error('Failed to load photos:', error);
         // Keep mock data as fallback
     } finally {
-        state.pagination.isLoadingMore = false;
+        state.pagination.isLoadingMoreMyPhotos = false;
     }
 }
 
@@ -163,7 +163,7 @@ async function loadFriendPhotos(loadMore = false) {
     const user = getCurrentUser();
     if (!user) return;
 
-    if (state.pagination.isLoadingMore) return;
+    if (state.pagination.isLoadingMoreFriendPhotos) return;
 
     try {
         if (!loadMore) {
@@ -173,7 +173,7 @@ async function loadFriendPhotos(loadMore = false) {
             state.friendPhotos = [];
         }
 
-        state.pagination.isLoadingMore = true;
+        state.pagination.isLoadingMoreFriendPhotos = true;
 
         const photos = await getFriendsPhotos(user.id, {
             limit: state.pagination.photosPerPage,
@@ -196,7 +196,7 @@ async function loadFriendPhotos(loadMore = false) {
         console.error('Failed to load friend photos:', error);
         // Keep mock data as fallback
     } finally {
-        state.pagination.isLoadingMore = false;
+        state.pagination.isLoadingMoreFriendPhotos = false;
     }
 }
 
@@ -430,7 +430,8 @@ const state = {
         friendPhotosOffset: 0,
         hasMoreMyPhotos: true,
         hasMoreFriendPhotos: true,
-        isLoadingMore: false,
+        isLoadingMoreMyPhotos: false,
+        isLoadingMoreFriendPhotos: false,
     },
 };
 
