@@ -2530,7 +2530,7 @@ function openAddFriendModal() {
 }
 
 async function handleFriendSearch() {
-    const searchTerm = elements.friendSearchInput.value.trim();
+    const searchTerm = elements.friendSearchInput.value.trim().replace(/^@/, '');
 
     if (!searchTerm) {
         showToast('검색어를 입력해주세요', 'warning');
@@ -2598,7 +2598,7 @@ async function handleFriendSearch() {
             } else {
                 buttonHtml = `<button class="btn btn-primary add-friend-btn"
                     data-user-id="${u.id}" data-user-name="${u.name}">
-                    <i class="ph ph-user-plus"></i><span>추가</span>
+                    <i class="ph ph-user-plus"></i><span>친구 요청</span>
                 </button>`;
             }
 
