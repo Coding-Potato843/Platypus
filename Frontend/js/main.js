@@ -2584,27 +2584,16 @@ async function handleProfileEdit(e) {
     }
 
     const username = elements.editUsername.value.trim();
-    const userId = elements.editUserId.value.trim();
 
-    // Validation
     if (!username) {
         showToast('사용자명을 입력해주세요', 'error');
-        return;
-    }
-
-    const userIdValidation = validateUsername(userId);
-    if (!userIdValidation.isValid) {
-        showToast(userIdValidation.errors[0], 'error');
         return;
     }
 
     showLoading(pendingAvatarFile ? '프로필 사진 업로드 중...' : '프로필 저장 중...');
 
     try {
-        const updates = {
-            username: username,
-            user_id: userId,
-        };
+        const updates = { username };
 
         // Handle avatar changes
         if (pendingAvatarFile) {
@@ -2625,9 +2614,8 @@ async function handleProfileEdit(e) {
         closeModal(elements.profileEditModal);
         showToast('프로필이 업데이트되었습니다', 'success');
 
-        // Update UI with new profile data
+        // Update username display
         elements.userName.textContent = username;
-        elements.userId.textContent = `@${userId}`;
 
         // Update avatar display
         const avatarElement = document.getElementById('userAvatar');

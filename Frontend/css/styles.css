@@ -2282,6 +2282,16 @@ body {
     background: var(--bg-primary);
 }
 
+.input-readonly {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.input-readonly input {
+    cursor: not-allowed;
+    color: var(--text-tertiary);
+}
+
 .input-hint {
     display: block;
     font-size: 0.75rem;
