@@ -2290,7 +2290,7 @@ function renderFriendsList() {
                     <div class="friend-name">${friend.name}${nicknameHtml}</div>
                     <div class="friend-id">@${friend.username}</div>
                 </div>
-                <button class="friend-edit-nickname-btn" aria-label="별명 수정" title="별명 ${nickname ? '수정' : '설정'}">
+                <button class="friend-edit-nickname-btn" aria-label="별명 수정" data-tooltip="별명 ${nickname ? '수정' : '설정'}">
                     <i class="ph ph-pencil-simple"></i>
                 </button>
                 <button class="friend-remove-btn" aria-label="친구 삭제">

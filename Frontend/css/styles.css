@@ -988,6 +988,7 @@ body {
 }
 
 .friend-edit-nickname-btn {
+    position: relative;
     background: none;
     border: none;
     color: var(--text-tertiary);
@@ -1000,6 +1001,29 @@ body {
 .friend-edit-nickname-btn:hover {
     color: var(--primary-500);
     background: rgba(6, 182, 212, 0.1);
+}
+
+.friend-edit-nickname-btn::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 4px 10px;
+    background: var(--bg-elevated, #334155);
+    color: var(--text-primary);
+    font-size: 0.75rem;
+    font-weight: 400;
+    white-space: nowrap;
+    border-radius: var(--border-radius-md);
+    border: 1px solid var(--border-color);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.friend-edit-nickname-btn:hover::after {
+    opacity: 1;
 }
 
 .friend-remove-btn {
@@ -1913,7 +1937,23 @@ body {
 .nickname-hint {
     font-size: 0.75rem;
     color: var(--text-tertiary);
-    margin-bottom: var(--spacing-lg);
+    margin-bottom: var(--spacing-sm);
+}
+
+.nickname-info {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 var(--spacing-lg);
+    font-size: 1.0rem;
+    color: var(--text-tertiary);
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.nickname-info li::before {
+    content: '· ';
 }
 
 /* ============================================
