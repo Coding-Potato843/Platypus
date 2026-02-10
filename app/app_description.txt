@@ -1,449 +1,146 @@
 # Platypus Mobile App - Technical Documentation
 
 ## Overview
-React Native (Expo) companion app for the Platypus photo sharing web service.
-Enables photo import from device gallery to Supabase.
-
----
+React Native (Expo) companion app for native gallery photo import to Supabase.
+No registration — users must register on web first, then login via app.
 
 ## Tech Stack
-- **Framework**: React Native + Expo SDK 54.0.33
-- **Language**: TypeScript
-- **React**: 19.1.0
-- **React Native**: 0.81.5 (must match Expo Go version)
-- **Backend**: Supabase (same as web frontend)
-- **Navigation**: React Navigation v7
-- **State**: React hooks (useAuth custom hook)
-- **Layout**: SafeAreaProvider (react-native-safe-area-context)
-
----
-
-## Supabase Configuration
-```typescript
-SUPABASE_URL = 'https://vtpgatnkobvjqwvoqtad.supabase.co'
-SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
-```
-Same credentials as web frontend. Uses AsyncStorage for session persistence.
+- Expo SDK 54.0.33, React 19.1.0, React Native 0.81.5, TypeScript
+- React Navigation v7, SafeAreaProvider
+- Backend: Same Supabase instance as web (see CLAUDE.md for config)
+- Session persistence via AsyncStorage
+- **Development build required** — Expo Go lacks expo-media-library full access and expo-crypto
 
 ---
 
 ## File Structure
 ```
 app/
-├── package.json                # Dependencies
-├── app.json                    # Expo config (permissions, icons)
-├── tsconfig.json               # TypeScript config
-├── babel.config.js             # Babel config
 ├── App.tsx                     # Entry point (navigation + auth routing)
+├── app.json                    # Expo config (permissions, icons)
+├── package.json, tsconfig.json, babel.config.js
 ├── src/
-│   ├── config/
-│   │   └── supabase.ts         # Supabase client (AsyncStorage session)
-│   ├── types/
-│   │   └── index.ts            # TypeScript types (User, Photo, GalleryFilter, etc.)
-│   ├── hooks/
-│   │   └── useAuth.ts          # Auth state hook (login, logout, profile)
+│   ├── config/supabase.ts      # Supabase client (AsyncStorage session)
+│   ├── types/index.ts          # TypeScript types
+│   ├── hooks/useAuth.ts        # Auth state hook (login, logout, profile)
 │   ├── services/
-│   │   ├── auth.ts             # Auth functions (login, logout, getSession)
-│   │   ├── photos.ts           # Photo upload (gallery scan, fetchAllPhotos, upload)
-│   │   └── geocoding.ts        # Reverse geocoding (GPS → location name)
+│   │   ├── auth.ts             # Auth functions
+│   │   ├── photos.ts           # Gallery scan, photo upload, duplicate detection
+│   │   └── geocoding.ts        # Reverse geocoding (Nominatim, cached, 1 req/sec)
 │   ├── components/
-│   │   ├── LoadingOverlay.tsx  # Full-screen loading modal
 │   │   ├── PhotoGrid.tsx       # Photo grid with selection checkmarks
-│   │   ├── GalleryPickerModal.tsx  # Gallery picker with filtering
-│   │   ├── DateRangePicker.tsx     # Year/month date picker
+│   │   ├── GalleryPickerModal.tsx  # Full gallery picker with filtering
+│   │   ├── DateRangePicker.tsx     # Year/month scroll picker (pure JS, no native deps)
 │   │   ├── FilterBar.tsx           # Collapsible filter UI
-│   │   ├── PermissionModal.tsx     # Gallery permission request modal
-│   │   ├── LastSyncDateEditor.tsx  # Last sync date editor modal
-│   │   └── CustomAlert.tsx     # Dark theme alert modal & toast (replaces Alert.alert)
+│   │   ├── PermissionModal.tsx     # Gallery permission request after denial
+│   │   ├── LastSyncDateEditor.tsx  # Manual last scan date editor
+│   │   ├── CustomAlert.tsx     # Dark theme alert + toast (replaces Alert.alert)
+│   │   └── LoadingOverlay.tsx  # Full-screen loading modal
 │   └── screens/
-│       ├── LoginScreen.tsx     # Email/password login form
-│       └── SyncScreen.tsx      # Main sync UI (scan, gallery picker, upload)
-└── assets/
-    ├── icon.png                # App icon (1024x1024)
-    ├── splash.png              # Splash screen
-    └── adaptive-icon.png       # Android adaptive icon
+│       ├── LoginScreen.tsx     # Email/password login
+│       └── SyncScreen.tsx      # Main screen: tab UI, scan, picker, upload
+└── assets/                     # icon.png, splash.png, adaptive-icon.png
 ```
 
 ---
 
 ## Core Features
 
-### 1. Authentication (LoginScreen.tsx)
-- Email/password login via Supabase Auth
-- Session persistence via AsyncStorage
+### Authentication (LoginScreen.tsx)
+- Email/password login via Supabase Auth, session persisted in AsyncStorage
+- Auto-navigation to SyncScreen on login
 - Korean UI text
-- Auto-navigation to SyncScreen on successful login
 
-### 2. Permission Request (PermissionModal.tsx + SyncScreen.tsx)
+### Permission Request (PermissionModal.tsx)
+- Triggered only when user taps scan/select button (NOT on app launch)
+- Flow: System dialog first → if denied → custom PermissionModal with settings guide
+- AppState listener re-checks permission when returning from settings
+- Stateless (no AsyncStorage flags)
 
-Permission is requested only when user taps gallery scan/select buttons, not on app launch.
+### Tab-Based Import (SyncScreen.tsx)
 
-**Permission Request Flow:**
-1. User taps "갤러리 스캔" or "갤러리에서 선택" button
-2. If permission not granted → `MediaLibrary.requestPermissionsAsync()` shows system dialog
-3. If user grants permission → Proceed with gallery operation
-4. If user denies permission → Show custom PermissionModal with settings guide
-5. AppState listener re-checks permission when app returns to foreground
+Two tabs with independent photo lists:
 
-**PermissionModal UI Components:**
-- Title: "갤러리 접근 권한 필요"
-- Description: Explains why permission is needed
-- Step-by-step guide: "1. 권한 → 2. 사진 및 동영상 → 3. 허용"
-- "설정으로 이동" (primary, cyan) - Opens app settings via `Linking.openSettings()`
-- "알겠습니다" (secondary, gray text) - Closes modal
-- Privacy note reassuring user about data safety
+| Feature | Gallery Scan (갤러리 스캔) | Select from Gallery (갤러리에서 선택) |
+|---------|--------------------------|--------------------------------------|
+| Last scan date | Shown (with "수정" edit button) | Hidden |
+| Photo selection | All PRE-SELECTED | None selected |
+| Date filtering | After `last_sync_at` only | No restriction |
+| Updates `last_sync_at` | Yes | No |
+| Button labels | "갤러리 스캔" / "다시 스캔" | "갤러리에서 선택" / "추가 선택" |
 
-**Key Design Decisions:**
-- No automatic modal on app launch (cleaner UX)
-- System permission dialog shown first (standard behavior)
-- Custom modal only after denial (provides settings guidance)
-- No AsyncStorage flags (stateless, simpler logic)
-- AppState listener ensures permission state updates when returning from settings
+- Active tab: cyan background; tabs preserve photo lists when switching
+- "전체 선택" / "전체 해제" for bulk selection
+- Upload button with progress indicator
 
-### 3. Gallery Import (SyncScreen.tsx)
+### Gallery Picker Modal (GalleryPickerModal.tsx)
+- Full-screen modal, infinite scroll (50/batch)
+- Date filtering: native-level via MediaLibrary `createdAfter`/`createdBefore`
+- Location filtering: client-side text search (partial match)
+- Already-added photos shown as disabled
+- FilterBar.tsx: collapsible section with DateRangePicker + location input
 
-**Tab-Based UI Design:**
+### Last Sync Date Editor (LastSyncDateEditor.tsx)
+- "수정" button in Gallery Scan tab, opens modal with year/month/day/hour/minute pickers
+- Only allows past to current time; "현재 시간으로 설정" quick-set button
+- Clears scan photos list after date change
+- Date format: `YY년 M월 D일 오전/오후 H:MM`
 
-The app uses a tab-based interface to clearly separate two import methods. Each tab maintains its own independent photo list.
+### Custom Alert & Toast (CustomAlert.tsx)
+Replaces system `Alert.alert()` for dark theme consistency.
 
-**Tab UI Components:**
-- Two tabs at the top: "갤러리 스캔" / "갤러리에서 선택"
-- Active tab has cyan background (#06b6d4), inactive has gray text
-- Tabs preserve their photo lists when switching between them
-
-#### Tab 1: "갤러리 스캔" (Gallery Scan)
-1. Shows "마지막 스캔 날짜" (Last Scan Date) info box with "수정" (Edit) button
-2. User can tap "수정" button to manually change the last scan date
-3. User taps "갤러리 스캔" button
-3. App requests gallery permission (expo-media-library)
-4. Scans all photos from device
-5. Filters: only photos with `modificationTime > last_sync_at` (last scan date)
-6. Displays in grid with ALL photos PRE-SELECTED
-7. User taps to DESELECT unwanted photos
-8. User taps "업로드" button
-9. Photos uploaded to Supabase Storage + Database
-10. **`last_sync_at` updated** in user profile after successful upload
-
-#### Tab 2: "갤러리에서 선택" (Select from Gallery)
-1. Does NOT show last scan date (hidden intentionally)
-2. User taps "갤러리에서 선택" button
-3. Opens GalleryPickerModal with ALL gallery photos (no date filter)
-4. User can apply filters:
-   - **Date Range**: Select start/end year-month
-   - **Location Search**: Text search for location name
-5. User taps to SELECT wanted photos (NOT pre-selected)
-6. User taps "선택 완료" → Photos added to picker tab's list
-7. User taps "업로드" to upload
-8. **`last_sync_at` is NOT updated** (intentional - allows selecting old photos without affecting scan date)
-
-**Key Behavior Differences:**
-
-| Feature | Gallery Scan Tab | Select from Gallery Tab |
-|---------|-----------------|------------------------|
-| Last scan date display | Shown | Hidden |
-| Photo pre-selection | All selected | None selected |
-| Date filtering | After last scan only | No restriction |
-| Updates last_sync_at | ✅ Yes | ❌ No |
-| Use case | Regular sync of new photos | Manual selection of specific photos |
-
-**Key UX:**
-- **Gallery Scan Tab**: Photos are selected by DEFAULT (checkmark visible)
-- **Select from Gallery Tab**: Photos are NOT selected by default (user selects manually)
-- "전체 선택" / "전체 해제" buttons for bulk operations
-- Progress indicator during upload
-- "다시 스캔" button in Gallery Scan tab
-- "추가 선택" button in Select from Gallery tab
-
-### 4. Gallery Picker Modal (GalleryPickerModal.tsx)
-
-**Features:**
-- Full-screen modal with infinite scroll (50 photos per batch)
-- Native-level date filtering (`createdAfter`/`createdBefore` in MediaLibrary API)
-- Client-side location search (partial text match)
-- Background geocoding for visible photos
-- Duplicate prevention (already-added photos shown as disabled)
-
-**Filter UI (FilterBar.tsx):**
-- Collapsible filter section
-- Date range with DateRangePicker
-- Location text input with clear button
-- "필터 초기화" button
-
-**DateRangePicker.tsx:**
-- Year/Month scroll list selection (not native calendar)
-- Cancel button (red, left) / Confirm button (sky blue, right) at bottom
-- Future date prevention (max = current date)
-- No native module dependency (works in Expo Go)
-
-### 5. Photo Services (services/photos.ts)
-
-**Key Functions:**
-
-1. **`fetchPhotosAfterDate(afterDate)`** - Auto scan
-   - Scans ALL albums including Downloads, Telegram, WhatsApp, KakaoTalk
-   - Uses `modificationTime` (not `creationTime`) for filtering
-   - Camera photos: modificationTime ≈ creationTime
-   - Downloaded images: modificationTime = download time
-   - Pre-selects all photos (`selected: true`)
-   - Deduplicates across albums using Map
-
-2. **`fetchAllPhotos(options)`** - Manual picker
-   - Fetches all photos with pagination (50 per batch)
-   - Scans all albums on first page load (`includeAllAlbums: true`)
-   - Supports native date filtering: `createdAfter`, `createdBefore`
-   - Does NOT pre-select photos (`selected: false`)
-   - Returns `{ photos, hasNextPage, endCursor }`
-
-**Scanned Albums:**
-```javascript
-['download', 'downloads', '다운로드', 'telegram', 'whatsapp', 'kakaotalk']
-```
-
-3. **`uploadPhoto(userId, photo)`** - Single upload
-   - Read photo as base64 (FileSystem.readAsStringAsync)
-   - Convert to Uint8Array
-   - Upload to Supabase Storage: `{userId}/{timestamp}_{random}.{ext}`
-   - Get public URL
-   - Determine date_taken (priority: EXIF > modificationTime > creationTime > now)
-   - Reverse geocode if GPS available
-   - Insert record to 'photos' table
-
-**Upload Date Priority:**
-Downloaded images often lack EXIF data and may have invalid creationTime (0 = 1970-01-01).
-Priority order: EXIF DateTimeOriginal > modificationTime > creationTime > current time
-
-4. **`uploadPhotos(userId, photos, onProgress)`** - Batch upload with duplicate detection
-   - Calculates SHA-256 hash for each photo before upload
-   - Batch queries database to find existing hashes
-   - Skips duplicate photos automatically
-   - Sequential upload with progress tracking
-   - Returns `{ success, failed, skipped }` counts
-
-5. **`calculateFileHash(uri)`** - Hash calculation
-   - Uses expo-crypto for SHA-256 hashing
-   - Requires development build (not available in Expo Go)
-   - Returns hex string of file hash
-
-6. **`checkDuplicateHashes(userId, hashes)`** - Duplicate check
-   - Batch query to check multiple hashes at once
-   - Returns Set of existing hashes
-
-### 6. GPS Location Extraction (services/photos.ts)
-
-expo-media-library returns GPS coordinates in two different formats depending on the device/OS version. The `assetToPhotoAsset` function handles both:
-
-**GPS Coordinate Sources (in priority order):**
-1. **`assetInfo.location`** - expo-media-library standard format (`{ latitude, longitude }`)
-2. **`assetInfo.exif.GPSLatitude/GPSLongitude`** - Raw EXIF data (fallback)
-
-This ensures location data is properly extracted regardless of how the device provides GPS metadata.
-
-### 7. Reverse Geocoding (services/geocoding.ts)
-- Uses OpenStreetMap Nominatim API (free, no API key)
-- Rate limited: 1 request per second
-- Converts GPS coordinates → location name
-- Example: (37.5665, 126.9780) → "서울특별시, 중구"
-- Results cached to reduce API calls
-
-### 8. Duplicate Detection (services/photos.ts)
-
-SHA-256 hash-based duplicate photo prevention.
-
-**How It Works:**
-1. Before upload, calculate SHA-256 hash of each photo using expo-crypto
-2. Batch query database to check for existing hashes
-3. Skip photos whose hashes already exist
-4. Upload new photos with hash stored in `file_hash` column
-
-**Progress Callback:**
 ```typescript
-onProgress(current: number, total: number, status: 'hashing' | 'uploading')
-```
-
-**UI Feedback:**
-- During hash calculation: "중복 검사 중... X/Y"
-- During upload: "업로드 중... X/Y"
-- Result alert: "3장 성공, 2장 중복 제외"
-
-**Requirements:**
-- **expo-crypto**: Native module required (must use development build, not Expo Go)
-- **Database**: `file_hash` column and index on photos table
-
-**Performance:**
-- Hash calculation: ~100-200ms per 5MB photo
-- Batch query: ~50-100ms for 100 hashes
-- Total overhead: ~2-3 seconds for 100 photos
-
-### 9. Custom Alert & Toast (components/CustomAlert.tsx)
-
-Custom UI components replacing React Native's default `Alert.alert()` to match the app's dark theme.
-
-**Why Custom:**
-- Default Alert uses system styling (white background) that doesn't match dark theme
-- Custom components provide consistent visual experience across the app
-
-**Components:**
-
-| Component | Purpose | Auto-dismiss |
-|-----------|---------|--------------|
-| `CustomAlert` | Confirmation dialogs, error messages | No (button tap required) |
-| `Toast` | Success notifications | Yes (2.5 seconds) |
-
-**CustomAlert Styling:**
-- Background: `#1e293b` (slate-800)
-- Text: `#f1f5f9` (slate-100)
-- Default button: `#06b6d4` (cyan) background
-- Cancel button: `#334155` (gray) background
-- Destructive button: `#ef4444` (red) background
-- Button order: action button on TOP, cancel button on BOTTOM
-
-**Toast Styling:**
-- Position: Bottom of screen (100px from bottom)
-- Background: `#1e293b` with `#06b6d4` border
-- Checkmark icon + message text
-- Slide-up animation with fade
-- Auto-dismiss after 2.5 seconds
-
-**Usage:**
-```typescript
-// In component
 const { showAlert, AlertComponent } = useCustomAlert();
 const { showToast, ToastComponent } = useToast();
 
-// Show alert with buttons
-showAlert('사진 업로드', '3장의 사진을 업로드하시겠습니까?', [
-  { text: '취소', style: 'cancel' },
-  { text: '업로드', onPress: handleUpload },
+showAlert('Title', 'Message', [
+  { text: 'Cancel', style: 'cancel' },       // gray, bottom
+  { text: 'Confirm', onPress: handleConfirm }, // cyan, top
 ]);
+showToast('3장 업로드 완료');  // auto-dismiss 2.5s
 
-// Show toast (auto-dismiss)
-showToast('3장 업로드 완료');
-
-// Must render in JSX
-return (
-  <>
-    {/* ... other content ... */}
-    <AlertComponent />
-    <ToastComponent />
-  </>
-);
+// Must render <AlertComponent /> and <ToastComponent /> in JSX
 ```
 
-**Where Used:**
-- `SyncScreen.tsx`: Upload confirmation, scan complete, upload success (toast), errors, logout
-- `LoginScreen.tsx`: Login errors, validation messages
-
-### 10. Last Sync Date Editor (components/LastSyncDateEditor.tsx)
-
-Allows users to manually edit the last scan date (마지막 스캔 날짜).
-
-**Features:**
-- "수정" (Edit) button next to the last scan date in Gallery Scan tab
-- Full date/time selection: Year, Month, Day, Hour, Minute
-- Future dates are disabled (only past to current time selectable)
-- "현재 시간으로 설정" button to quickly set to current time
-- Dark theme styling matching the app
-- Compact date format: `YY년 M월 D일 오전/오후 H:MM` (e.g., "25년 1월 20일 오후 2:30")
-
-**Use Cases:**
-- User wants to re-scan photos from a specific date
-- User accidentally advanced the scan date and wants to reset it
-- User migrating from another device and wants to import older photos
-
-**UI Components:**
-- Modal with year/month/day pickers (scrollable)
-- Separate hour/minute pickers for time
-- "현재 시간으로 설정" quick-set button
-- Warning message for future dates
-- Cancel/Confirm buttons at bottom
-
-**Behavior:**
-- Opens when user taps the "수정" button
-- Pre-selects current last sync date (or current time if null)
-- Clears scan photos list after date change
-- Shows toast notification on success
+Button styles: default (cyan), cancel (gray), destructive (red). Order: action top, cancel bottom.
 
 ---
 
-## Database Schema (Same as Web)
+## Photo Services (services/photos.ts)
 
-### users table
-| Column | Type | Description |
-|--------|------|-------------|
-| id | uuid | PK (same as auth.users.id) |
-| email | text | User email |
-| username | text | Display name |
-| last_sync_at | timestamp | Last scan date (CRITICAL for incremental import) |
+### Key Functions
 
-### photos table
-| Column | Type | Description |
-|--------|------|-------------|
-| id | uuid | PK |
-| user_id | uuid | FK → users.id |
-| url | text | Photo URL from Storage |
-| date_taken | timestamp | When photo was taken |
-| location | text | Location name |
-| file_hash | text | SHA-256 hash for duplicate detection |
-| created_at | timestamp | Upload time |
+**`fetchPhotosAfterDate(afterDate)`** — Gallery Scan tab
+- Scans ALL albums: Camera, Downloads/다운로드, Telegram, WhatsApp, KakaoTalk
+- Filters by `modificationTime > afterDate` (not creationTime — catches downloaded images)
+- Pre-selects all photos; deduplicates across albums via Map
 
----
+**`fetchAllPhotos(options)`** — Gallery Picker modal
+- Pagination (50/batch), returns `{ photos, hasNextPage, endCursor }`
+- Native date filtering: `createdAfter`/`createdBefore`
+- Does NOT pre-select photos
 
-## Permissions
+**`uploadPhoto(userId, photo)`** — Single upload
+- Read as base64 → Uint8Array → Supabase Storage (`{userId}/{timestamp}_{random}.{ext}`)
+- date_taken priority: EXIF DateTimeOriginal > modificationTime > creationTime > now
+- Reverse geocode if GPS available → insert to photos table
 
-### iOS (app.json)
-- `NSPhotoLibraryUsageDescription`: Gallery access for sync
+**`uploadPhotos(userId, photos, onProgress)`** — Batch upload with dedup
+- SHA-256 hash each photo (expo-crypto) → batch check DB → skip duplicates → upload
+- Progress: `onProgress(current, total, 'hashing' | 'uploading')`
+- Returns `{ success, failed, skipped }`
 
-### Android (app.json)
-Only photo-related permissions are included (video/audio permissions removed):
-- `READ_EXTERNAL_STORAGE`: Legacy storage access (Android < 13)
-- `READ_MEDIA_IMAGES`: Android 13+ photo access
-- `READ_MEDIA_VISUAL_USER_SELECTED`: Android 14+ partial access support
-- `ACCESS_MEDIA_LOCATION`: Required for reading GPS data from photo EXIF
+**`calculateFileHash(uri)`** / **`checkDuplicateHashes(userId, hashes)`**
+- expo-crypto SHA-256; requires dev build (Expo Go throws "Cannot find native module 'ExpoCrypto'")
 
-**Removed permissions** (not needed for photo-only app):
-- `WRITE_EXTERNAL_STORAGE`: Not saving photos to device
-- `READ_MEDIA_VIDEO`: Not handling videos
-- `READ_MEDIA_AUDIO`: Not handling audio files
-
-### expo-media-library Plugin Config
-```json
-{
-  "photosPermission": "사진을 불러오려면 갤러리 접근 권한이 필요합니다.",
-  "savePhotosPermission": "사진을 저장하려면 갤러리 접근 권한이 필요합니다.",
-  "isAccessMediaLocationEnabled": true
-}
-```
+### GPS Location Extraction
+Two sources checked in order:
+1. `assetInfo.location.latitude/longitude` (expo-media-library standard)
+2. `assetInfo.exif.GPSLatitude/GPSLongitude` (raw EXIF fallback)
 
 ---
 
-## UI Theme (Match Web)
-- Background: `#0f172a` (slate-900)
-- Card: `#1e293b` (slate-800)
-- Primary: `#06b6d4` (cyan-500)
-- Text: `#f1f5f9` (slate-100)
-- Border: `#334155` (slate-700)
-- Error: `#ef4444` (red-500)
-
----
-
-## UI Terminology (Korean)
-
-| English | Korean (UI) | Notes |
-|---------|-------------|-------|
-| Last Scan Date | 마지막 스캔 날짜 | Displayed on SyncScreen (mobile uses relative format) |
-| Gallery Scan | 갤러리 스캔 | Auto-scan button |
-| Select from Gallery | 갤러리에서 선택 | Manual picker button |
-| Scan Complete | 스캔 완료 | Alert title |
-| Photo Management App | 사진 관리 앱 | LoginScreen subtitle |
-| Permission Required | 갤러리 접근 권한 필요 | Permission modal title |
-| Go to Settings | 설정으로 이동 | Permission modal primary button |
-| I Understand | 알겠습니다 | Permission modal dismiss button |
-
-**Note**: The word "동기화" (sync) is NOT used in the UI. Use "불러오기" (import/load) or "스캔" (scan) instead.
-
----
-
-## Key TypeScript Types
+## TypeScript Types
 
 ```typescript
 interface PhotoAsset {
@@ -455,11 +152,7 @@ interface PhotoAsset {
   width: number;
   height: number;
   mediaType: string;
-  exif?: {
-    DateTimeOriginal?: string;
-    GPSLatitude?: number;
-    GPSLongitude?: number;
-  };
+  exif?: { DateTimeOriginal?: string; GPSLatitude?: number; GPSLongitude?: number; };
   selected: boolean;         // UI selection state
   location?: string | null;  // Reverse geocoded location
 }
@@ -468,286 +161,119 @@ interface UserProfile {
   id: string;
   email: string;
   username: string;
-  last_sync_at: string | null;  // ISO date string
+  last_sync_at: string | null;
 }
 
-// NEW: Gallery filter for picker modal
 interface GalleryFilter {
-  startDate: Date | null;    // Filter start (year-month)
-  endDate: Date | null;      // Filter end (year-month)
-  locationSearch: string;    // Location text search
+  startDate: Date | null;
+  endDate: Date | null;
+  locationSearch: string;
 }
 ```
 
 ---
 
-## Development Commands
+## Permissions
 
-```bash
-# Install dependencies (MUST use --legacy-peer-deps due to React 19 conflicts)
-cd app
-npm install --legacy-peer-deps
+### Android (app.json)
+- `READ_EXTERNAL_STORAGE` (Android < 13), `READ_MEDIA_IMAGES` (13+), `READ_MEDIA_VISUAL_USER_SELECTED` (14+)
+- `ACCESS_MEDIA_LOCATION` — required for GPS EXIF data
 
-# Start Expo dev server (tunnel mode for mobile access)
-npm start
-# or
-npx expo start --tunnel
+### iOS (app.json)
+- `NSPhotoLibraryUsageDescription`
 
-# Run on Android
-npm run android
-
-# Run on iOS (Mac only)
-npm run ios
-
-# Clean reinstall (if issues occur)
-rm -rf node_modules package-lock.json .expo
-npm install --legacy-peer-deps
+### expo-media-library plugin
+```json
+{ "photosPermission": "사진을 불러오려면 갤러리 접근 권한이 필요합니다.",
+  "savePhotosPermission": "사진을 저장하려면 갤러리 접근 권한이 필요합니다.",
+  "isAccessMediaLocationEnabled": true }
 ```
 
-## EAS Build (Development APK)
+---
 
-Expo Go has limitations with media library access on Android.
-Use EAS Build to create a development APK with full permissions:
+## UI Theme
+| Token | Value | Name |
+|-------|-------|------|
+| Background | `#0f172a` | slate-900 |
+| Card | `#1e293b` | slate-800 |
+| Primary | `#06b6d4` | cyan-500 |
+| Text | `#f1f5f9` | slate-100 |
+| Border | `#334155` | slate-700 |
+| Error | `#ef4444` | red-500 |
 
+---
+
+## UI Terminology (Korean)
+
+| English | Korean | Context |
+|---------|--------|---------|
+| Last Scan Date | 마지막 스캔 날짜 | Gallery Scan tab |
+| Gallery Scan | 갤러리 스캔 | Auto-scan button/tab |
+| Select from Gallery | 갤러리에서 선택 | Manual picker button/tab |
+| Scan Complete | 스캔 완료 | Alert title |
+| Photo Management App | 사진 관리 앱 | Login subtitle |
+| Permission Required | 갤러리 접근 권한 필요 | Permission modal |
+| Go to Settings | 설정으로 이동 | Permission modal button |
+| I Understand | 알겠습니다 | Permission modal dismiss |
+
+> **"동기화" (sync) is NOT used** in UI. Use "불러오기" (import) or "스캔" (scan).
+
+---
+
+## Development
+
+### Commands
 ```bash
-# Install EAS CLI globally
-npm install -g eas-cli
+cd app
+npm install --legacy-peer-deps          # MUST use --legacy-peer-deps (React 19 conflicts)
+npx expo start --tunnel                 # Dev server with QR code
+npx expo start --clear                  # Clear cache and start
+```
 
-# Login to Expo account
-eas login
-
-# Configure EAS (first time only)
-eas build:configure
-
-# Build development APK for Android
+### EAS Build (required for full functionality)
+```bash
+npm install -g eas-cli && eas login
+eas build:configure                     # First time only
 eas build --profile development --platform android
 ```
+Download APK from Expo dashboard after build.
 
-After build completes, download the APK from Expo dashboard and install on device.
+### Clean Reinstall
+```bash
+rm -rf node_modules package-lock.json .expo && npm install --legacy-peer-deps
+```
 
 ---
 
-## Testing Checklist
+## Known Issues (Windows)
 
-### Permission Request Flow
-1. **Fresh Install**: Uninstall and reinstall app (or clear app data)
-2. **First Launch**: No modal should appear automatically
-3. **Tap Scan Button**: Tap "갤러리 스캔" button
-4. **System Dialog**: System permission dialog should appear first
-5. **Grant Permission**: Tap "Allow" in system dialog
-6. **Verify**: Gallery scan should proceed normally
-7. **Deny Permission Test**: Reinstall app, tap scan, deny in system dialog
-8. **Custom Modal**: Custom PermissionModal should appear with settings guide
-9. **Settings Navigation**: Tap "설정으로 이동", grant permission in settings
-10. **Return to App**: Permission should be detected automatically (AppState listener)
-11. **Verify**: Tapping scan button again should work without any modal
-
-### Tab UI Testing
-1. **Tab Display**: Verify two tabs appear: "갤러리 스캔" and "갤러리에서 선택"
-2. **Tab Switching**: Tap each tab and verify active tab has cyan background
-3. **Independent Lists**: Add photos in one tab, switch tabs, switch back - verify photos are preserved
-4. **Last Scan Date**: Verify "마지막 스캔 날짜" only shows in "갤러리 스캔" tab, NOT in "갤러리에서 선택" tab
-
-### Gallery Scan Tab ("갤러리 스캔")
-1. **Login**: Use existing Platypus web account
-2. **Permission**: Grant gallery access when prompted (if not already)
-3. **Scan**: Tap "갤러리 스캔" to load photos
-4. **Selection**: Verify photos are pre-selected, tap to deselect
-5. **Upload**: Tap "업로드" and watch progress
-6. **Verify last_sync_at Update**: After upload, verify "마지막 스캔 날짜" is updated to current time
-7. **Verify on Web**: Login to web frontend, check uploaded photos appear
-8. **Incremental Import**: Scan again, verify only NEW photos shown (after updated last scan date)
-9. **Downloaded Images**: Verify images from Downloads folder appear in scan
-10. **Messenger Images**: Verify images from Telegram/WhatsApp/KakaoTalk appear
-
-### Select from Gallery Tab ("갤러리에서 선택")
-1. **Switch Tab**: Tap "갤러리에서 선택" tab
-2. **No Last Scan Date**: Verify last scan date info box is NOT displayed
-3. **Open Picker**: Tap "갤러리에서 선택" to open modal
-4. **Infinite Scroll**: Scroll down to load more photos
-5. **Date Filter**: Set start/end date, verify filtered results
-6. **Location Filter**: Search for location name (e.g., "서울")
-7. **Selection**: Tap photos to select (verify they are NOT pre-selected)
-8. **Confirm**: Tap "선택 완료" to add to picker tab's list
-9. **Upload**: Verify selected photos upload correctly
-10. **Verify last_sync_at NOT Updated**: After upload, switch to "갤러리 스캔" tab and verify "마지막 스캔 날짜" is UNCHANGED
-11. **Old Photos**: Confirm photos before last scan date can be selected and uploaded without affecting scan date
-
-### Downloaded Image Date Handling
-1. **Download Image**: Download an image from the internet
-2. **Scan/Pick**: Include the downloaded image in upload
-3. **Upload**: Upload the downloaded image
-4. **Verify Date**: Check on web that date is download time (NOT 1970-01-01)
-
-### Location Data (GPS)
-1. **Photo with GPS**: Take or select a photo with GPS metadata
-2. **Upload**: Upload the photo via mobile app
-3. **Verify on Web**: Check that location is displayed in photo detail modal (NOT null)
-4. **Database Check**: Verify `location` column in photos table is populated
-
-### Duplicate Detection
-1. **First Upload**: Upload a set of photos
-2. **Verify Hashes**: Check database that file_hash column is populated
-3. **Re-upload Same Photos**: Try to upload the same photos again
-4. **Verify Skip**: Confirm message shows "X장 중복 제외"
-5. **Mixed Upload**: Upload mix of new and duplicate photos
-6. **Verify Partial**: Confirm only new photos are uploaded, duplicates skipped
+| Error | Solution |
+|-------|----------|
+| Port 8081 in use | Kill node.exe: `Get-Process -Name node \| Stop-Process -Force` |
+| Peer dependency conflicts | Always use `--legacy-peer-deps` |
+| `babel-preset-expo` not found | `npm install babel-preset-expo --legacy-peer-deps` |
+| RN version mismatch / black screen | Ensure `react-native: 0.81.5` matches Expo SDK 54; clean reinstall |
+| Expo Go media library limitation | Use EAS development build |
+| `ACCESS_MEDIA_LOCATION` error | Add permission to app.json + `isAccessMediaLocationEnabled: true` |
+| `expo-file-system` deprecated API | Import from `expo-file-system/legacy` |
+| `ExpoCrypto` native module not found | Use EAS development build (not Expo Go) |
 
 ---
 
 ## Important Notes
-
-1. **Same Supabase Database**: Photos uploaded from this app appear on web gallery
-2. **RLS Enabled**: Users can only access their own data
-3. **last_sync_at**: Critical for incremental import - only imports photos newer than this timestamp (last scan date). **ONLY mobile app's "Gallery Scan" tab updates this field**; web photo import and mobile "Select from Gallery" tab do NOT update `last_sync_at`
-4. **Storage Path**: `{userId}/{timestamp}_{random}.{ext}` (same pattern as web)
-5. **No Registration**: Users must register on web first, then login via app
-6. **Duplicate Detection**: Requires development build (expo-crypto native module). Expo Go will throw "Cannot find native module 'ExpoCrypto'" error
-7. **file_hash Column**: Must be added to photos table before using duplicate detection feature
-8. **Date Format Difference**: Web shows Korean datetime format (`YYYY년 M월 D일 오전/오후 H:MM`) for last scan, mobile shows localized datetime
-9. **Web vs Mobile Date Filtering**: Web has no client-side date filtering (hash-only), mobile uses `last_sync_at` for "Gallery Scan" tab only
-10. **Tab-Based last_sync_at Update**: Only "Gallery Scan" tab updates `last_sync_at` on upload; "Select from Gallery" tab does NOT update it (intentional - allows uploading old photos without affecting the scan date)
+- Same Supabase database as web — uploaded photos appear in web gallery
+- Storage path: `{userId}/{timestamp}_{random}.{ext}` (same as web)
+- `last_sync_at` is ONLY updated by Gallery Scan tab upload; web and Select from Gallery do NOT update it
+- `modificationTime` used for scan filtering (not `creationTime`) to catch downloaded images
+- `expo-file-system/legacy` required for `readAsStringAsync`
+- Double back press to exit (Android only, 2s window with toast)
+- Manual import only — background upload not planned
 
 ---
 
-## Error Handling
-
-- **Permission Denied**: Alert with clear message, retry option
-- **Upload Failure**: Individual photo failures logged, continue with others
-- **Network Error**: Toast/Alert with error message
-- **Empty Gallery**: Message "새로운 사진이 없습니다"
-
----
-
-## Development Notes (Windows)
-
-### Known Issues & Solutions
-
-1. **node:sea path error (Expo SDK 50)**
-   - Windows doesn't allow colons in directory names
-   - Solution: Upgrade to Expo SDK 54
-
-2. **Port 8081 already in use**
-   - Previous Expo process still running
-   - Solution: Kill all node.exe in Task Manager, or PowerShell:
-     ```powershell
-     Get-Process -Name node | Stop-Process -Force
-     ```
-
-3. **Dependency conflicts (peer deps)**
-   - React 19 vs React Native peer dependency issues
-   - Solution: Use `npm install --legacy-peer-deps`
-
-4. **babel-preset-expo not found**
-   - Missing after dependency reinstall
-   - Solution: `npm install babel-preset-expo --legacy-peer-deps`
-
-5. **React Native version mismatch (Black screen on mobile)**
-   - Error: "JavaScript version: 0.77.0, Native version: 0.81.4"
-   - Cause: Expo Go app requires specific React Native version
-   - Solution: Update package.json to use `react-native: 0.81.5` and all Expo packages to SDK 54 compatible versions
-   - Run: `rm -rf node_modules package-lock.json && npm install --legacy-peer-deps`
-
-6. **Expo Go media library limitation**
-   - Warning: "Expo Go can no longer provide full access to the media library"
-   - Cause: Android permission changes
-   - Solution: Use EAS Build to create development APK
-
-7. **ACCESS_MEDIA_LOCATION permission error**
-   - Error: "Cannot access ExifInterface because of missing ACCESS_MEDIA_LOCATION permission"
-   - Cause: Android requires explicit permission for GPS EXIF data
-   - Solution: Add `ACCESS_MEDIA_LOCATION` to permissions and `isAccessMediaLocationEnabled: true` in expo-media-library plugin
-
-8. **expo-file-system deprecated API**
-   - Error: "Method readAsStringAsync imported from expo-file-system is deprecated"
-   - Cause: expo-file-system v19 changed API
-   - Solution: Import from `expo-file-system/legacy` instead
-
-9. **expo-crypto native module not found**
-   - Error: "Cannot find native module 'ExpoCrypto'"
-   - Cause: expo-crypto requires native code, not available in Expo Go
-   - Solution: Use EAS Build to create development APK with native modules included
-
-### Useful Commands
-```bash
-# Clean reinstall
-rm -rf node_modules package-lock.json
-npm install --legacy-peer-deps
-
-# Clear cache and start
-npx expo start --clear
-
-# Build for web (test compilation)
-npx expo export --platform web
-
-# Serve built web app
-npx serve dist
-```
-
----
-
-## Current Status
-
-### Working (Development Build)
-- ✅ Login/Logout with Supabase Auth
-- ✅ Auth state persistence (AsyncStorage)
-- ✅ Navigation between screens
-- ✅ Dark theme UI matching web
-- ✅ **Permission Request** - System dialog first, custom modal only after denial (stateless approach)
-- ✅ Gallery auto-scan (expo-media-library)
-- ✅ EXIF extraction (date, GPS coordinates)
-- ✅ ACCESS_MEDIA_LOCATION permission for GPS data
-- ✅ Photo upload to Supabase Storage
-- ✅ Reverse geocoding (GPS → location name)
-- ✅ Incremental import (only photos after last scan date)
-- ✅ **Tab-Based UI** - Separate tabs for "Gallery Scan" and "Select from Gallery" with independent photo lists
-- ✅ **Selective last_sync_at Update** - Only "Gallery Scan" tab updates last scan date on upload
-- ✅ **Gallery Picker Modal** - Select any photos regardless of sync date
-- ✅ **Date Range Filter** - Year/month selection with native-level filtering
-- ✅ **Location Search** - Text-based location filtering
-- ✅ **Custom DateRangePicker** - No native module dependency
-- ✅ **All Albums Scan** - Includes Downloads, Telegram, WhatsApp, KakaoTalk
-- ✅ **Downloaded Image Support** - Proper date handling using modificationTime
-- ✅ **Duplicate Detection** - SHA-256 hash-based duplicate photo prevention
-- ✅ **GPS Location Fix** - Uses `assetInfo.location` (standard) with EXIF fallback for proper location extraction
-- ✅ **Double Back to Exit** - Press back twice within 2 seconds to exit app (Android only, with toast notification)
-- ✅ **Custom Alert/Toast UI** - Dark theme alert modals and toast notifications replacing system Alert.alert
-- ✅ **Last Sync Date Editor** - Manual editing of last scan date via "수정" button (past to current time only)
-
-### Notes
-- **Development build required**: Expo Go has limitations with media library access and lacks expo-crypto native module
-- **Manual import only**: Background upload is NOT planned
-- **expo-file-system/legacy**: Uses legacy API for `readAsStringAsync`
-- **Gallery Picker works in Expo Go**: DateRangePicker is pure JS, no native modules
-- **modificationTime**: Used for filtering instead of creationTime to catch downloaded images
-- **expo-crypto**: Native module for SHA-256 hashing, requires development build for duplicate detection
-
----
-
-## Future Enhancements (TODO)
-
-- [ ] Photo preview before upload (full-screen view)
-- [ ] Settings screen (data usage options)
-- [ ] Group assignment during sync
-- [ ] Offline queue for poor connectivity
-- [ ] iOS development build
-
-## Completed Enhancements
-
-- [x] **Gallery Picker** - Select photos before last scan date
-- [x] **Date Range Filter** - Native-level date filtering
-- [x] **Location Search** - Client-side text filtering
-- [x] **Custom Date Picker** - Year/month scroll selection without native modules
-- [x] **All Albums Scan** - Downloads, Telegram, WhatsApp, KakaoTalk support
-- [x] **Downloaded Image Date Fix** - Uses modificationTime for proper dating
-- [x] **UI Cleanup** - Removed camera icon, filter icon; streamlined date picker buttons
-- [x] **Permission Request Simplification** - Removed automatic modal on app launch; now shows system permission dialog first when user taps scan/select button, custom modal only after denial (stateless, no AsyncStorage flags)
-- [x] **AppState Permission Check** - Added AppState listener to re-check permission when app returns to foreground from settings
-- [x] **Android Permission Cleanup** - Removed unnecessary permissions (WRITE_EXTERNAL_STORAGE, READ_MEDIA_VIDEO, READ_MEDIA_AUDIO) for cleaner permission dialog
-- [x] **Duplicate Detection** - SHA-256 hash-based duplicate photo prevention (uses expo-crypto)
-- [x] **GPS Location Fix** - Fixed GPS coordinate extraction to use `assetInfo.location` (expo-media-library standard format) with EXIF fallback
-- [x] **Double Back to Exit** - Press back button twice within 2 seconds to exit app (Android only, toast notification on first press)
-- [x] **Tab-Based UI** - Separated "Gallery Scan" and "Select from Gallery" into distinct tabs with independent photo lists
-- [x] **Selective last_sync_at Update** - "Gallery Scan" tab updates last scan date on upload; "Select from Gallery" tab does not
-- [x] **Custom Alert/Toast UI** - Dark theme custom alert modals replacing system Alert.alert; toast notifications for upload success (auto-dismiss after 2.5s); button order: action on top, cancel on bottom
-- [x] **Last Sync Date Editor** - "수정" button next to last scan date; manual date/time editing with year/month/day/hour/minute pickers; future date prevention; "현재 시간으로 설정" quick button; compact date format (YY년 M월 D일)
+## Future TODO
+- Photo preview before upload (full-screen view)
+- Settings screen (data usage options)
+- Group assignment during sync
+- Offline queue for poor connectivity
+- iOS development build

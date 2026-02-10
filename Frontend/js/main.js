@@ -28,6 +28,7 @@ import {
     removeFriend as apiRemoveFriend,
     searchUsers,
     getUserStats,
+    uploadAvatar,
     updateUserProfile,
     ApiError,
     calculateFileHash,
@@ -575,7 +576,15 @@ const elements = {
     profileEditForm: document.getElementById('profileEditForm'),
     editUsername: document.getElementById('editUsername'),
     editUserId: document.getElementById('editUserId'),
-    editAvatarUrl: document.getElementById('editAvatarUrl'),
+    avatarEditPreview: document.getElementById('avatarEditPreview'),
+    avatarUploadBtn: document.getElementById('avatarUploadBtn'),
+    avatarFromPhotosBtn: document.getElementById('avatarFromPhotosBtn'),
+    avatarResetBtn: document.getElementById('avatarResetBtn'),
+    avatarFileInput: document.getElementById('avatarFileInput'),
+
+    // Avatar Photo Picker Modal Elements
+    avatarPhotoPickerModal: document.getElementById('avatarPhotoPickerModal'),
+    avatarPhotoGrid: document.getElementById('avatarPhotoGrid'),
 
     // Add Friend Modal Elements
     addFriendModal: document.getElementById('addFriendModal'),
@@ -639,6 +648,13 @@ function formatDateTime(dateString) {
 
 function getInitials(name) {
     return name.charAt(0).toUpperCase();
+}
+
+function renderAvatarContent(avatarUrl, name) {
+    if (avatarUrl) {
+        return `<img src="${avatarUrl}" alt="${name}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+    }
+    return getInitials(name);
 }
 
 function shuffleArray(array) {
@@ -907,6 +923,9 @@ async function updateUIForAuthenticatedUser(showLoadingOverlay = true) {
             : '마지막 스캔: 없음';
         // Store last sync date in state
         state.lastSyncDate = profile.last_sync_at || null;
+        // Display avatar if set
+        const avatarElement = document.getElementById('userAvatar');
+        setAvatarDisplay(avatarElement, profile.avatar_url || null);
     } else {
         // Fallback to auth user data
         elements.userName.textContent = user.user_metadata?.display_name || user.email;
@@ -2236,7 +2255,7 @@ function renderFriendsList() {
 
     elements.friendsList.innerHTML = state.friends.map(friend => `
         <div class="friend-item" data-friend-id="${friend.id}">
-            <div class="friend-avatar">${getInitials(friend.name)}</div>
+            <div class="friend-avatar">${renderAvatarContent(friend.avatar, friend.name)}</div>
             <div class="friend-info">
                 <div class="friend-name">${friend.name}</div>
                 <div class="friend-id">@${friend.username}</div>
@@ -2277,7 +2296,7 @@ function renderReceivedRequests() {
 
     list.innerHTML = requests.map(req => `
         <div class="request-item" data-friendship-id="${req.friendshipId}">
-            <div class="friend-avatar">${getInitials(req.name)}</div>
+            <div class="friend-avatar">${renderAvatarContent(req.avatar, req.name)}</div>
             <div class="friend-info">
                 <div class="friend-name">${req.name}</div>
                 <div class="friend-id">@${req.username}</div>
@@ -2327,7 +2346,7 @@ function renderSentRequests() {
 
     list.innerHTML = requests.map(req => `
         <div class="request-item" data-friendship-id="${req.friendshipId}">
-            <div class="friend-avatar">${getInitials(req.name)}</div>
+            <div class="friend-avatar">${renderAvatarContent(req.avatar, req.name)}</div>
             <div class="friend-info">
                 <div class="friend-name">${req.name}</div>
                 <div class="friend-id">@${req.username}</div>
@@ -2438,6 +2457,30 @@ function confirmRemoveFriend(friendId) {
 // ============================================
 // Profile Edit Functions
 // ============================================
+
+// Pending avatar state for profile edit
+let pendingAvatarFile = null;   // File object if uploading new image
+let pendingAvatarUrl = null;    // URL string if selecting from existing photos
+let pendingAvatarReset = false; // true if resetting to default
+
+function updateAvatarEditPreview(url) {
+    if (url) {
+        elements.avatarEditPreview.innerHTML = `<img src="${url}" alt="Avatar">`;
+        elements.avatarResetBtn.style.display = '';
+    } else {
+        elements.avatarEditPreview.innerHTML = '<i class="ph-fill ph-user"></i>';
+        elements.avatarResetBtn.style.display = 'none';
+    }
+}
+
+function setAvatarDisplay(element, url) {
+    if (url) {
+        element.innerHTML = `<img src="${url}" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+    } else {
+        element.innerHTML = '<i class="ph-fill ph-user"></i>';
+    }
+}
+
 async function openProfileEditModal() {
     const profile = await getCurrentUserProfile();
     const user = getCurrentUser();
@@ -2447,12 +2490,88 @@ async function openProfileEditModal() {
         return;
     }
 
+    // Reset pending avatar state
+    pendingAvatarFile = null;
+    pendingAvatarUrl = null;
+    pendingAvatarReset = false;
+
     // Pre-fill the form with current profile data
     elements.editUsername.value = profile?.username || user?.user_metadata?.display_name || '';
     elements.editUserId.value = profile?.user_id || user?.user_metadata?.username || '';
-    elements.editAvatarUrl.value = profile?.avatar_url || '';
+
+    // Show current avatar preview
+    updateAvatarEditPreview(profile?.avatar_url || null);
 
     openModal(elements.profileEditModal);
+}
+
+function handleAvatarFileSelect(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+        showToast('이미지 파일만 업로드할 수 있습니다', 'error');
+        e.target.value = '';
+        return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+        showToast('파일 크기는 5MB 이하여야 합니다', 'error');
+        e.target.value = '';
+        return;
+    }
+
+    pendingAvatarFile = file;
+    pendingAvatarUrl = null;
+    pendingAvatarReset = false;
+
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = (ev) => updateAvatarEditPreview(ev.target.result);
+    reader.readAsDataURL(file);
+
+    // Reset file input so same file can be re-selected
+    e.target.value = '';
+}
+
+function openAvatarPhotoPicker() {
+    const grid = elements.avatarPhotoGrid;
+
+    if (state.photos.length === 0) {
+        grid.innerHTML = `
+            <div class="empty-state">
+                <i class="ph ph-image"></i>
+                <p>사진이 없습니다</p>
+            </div>
+        `;
+    } else {
+        grid.innerHTML = state.photos.map(photo => `
+            <div class="avatar-photo-grid-item" data-photo-url="${photo.url}">
+                <img src="${photo.url}" alt="Photo" loading="lazy">
+            </div>
+        `).join('');
+
+        // Add click handlers
+        grid.querySelectorAll('.avatar-photo-grid-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const url = item.dataset.photoUrl;
+                pendingAvatarUrl = url;
+                pendingAvatarFile = null;
+                pendingAvatarReset = false;
+                updateAvatarEditPreview(url);
+                closeModal(elements.avatarPhotoPickerModal);
+            });
+        });
+    }
+
+    openModal(elements.avatarPhotoPickerModal);
+}
+
+function handleAvatarReset() {
+    pendingAvatarFile = null;
+    pendingAvatarUrl = null;
+    pendingAvatarReset = true;
+    updateAvatarEditPreview(null);
 }
 
 async function handleProfileEdit(e) {
@@ -2466,7 +2585,6 @@ async function handleProfileEdit(e) {
 
     const username = elements.editUsername.value.trim();
     const userId = elements.editUserId.value.trim();
-    const avatarUrl = elements.editAvatarUrl.value.trim();
 
     // Validation
     if (!username) {
@@ -2480,7 +2598,7 @@ async function handleProfileEdit(e) {
         return;
     }
 
-    showLoading('프로필 저장 중...');
+    showLoading(pendingAvatarFile ? '프로필 사진 업로드 중...' : '프로필 저장 중...');
 
     try {
         const updates = {
@@ -2488,9 +2606,17 @@ async function handleProfileEdit(e) {
             user_id: userId,
         };
 
-        // Only include avatar_url if provided
-        if (avatarUrl) {
+        // Handle avatar changes
+        if (pendingAvatarFile) {
+            // Upload new avatar file
+            const avatarUrl = await uploadAvatar(user.id, pendingAvatarFile);
             updates.avatar_url = avatarUrl;
+        } else if (pendingAvatarUrl) {
+            // Use selected photo URL
+            updates.avatar_url = pendingAvatarUrl;
+        } else if (pendingAvatarReset) {
+            // Reset to default
+            updates.avatar_url = null;
         }
 
         await updateUserProfile(user.id, updates);
@@ -2503,11 +2629,18 @@ async function handleProfileEdit(e) {
         elements.userName.textContent = username;
         elements.userId.textContent = `@${userId}`;
 
-        // Update avatar if URL provided
-        if (avatarUrl) {
-            const avatarElement = document.getElementById('userAvatar');
-            avatarElement.innerHTML = `<img src="${avatarUrl}" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+        // Update avatar display
+        const avatarElement = document.getElementById('userAvatar');
+        if (pendingAvatarFile || pendingAvatarUrl) {
+            setAvatarDisplay(avatarElement, updates.avatar_url);
+        } else if (pendingAvatarReset) {
+            setAvatarDisplay(avatarElement, null);
         }
+
+        // Reset pending state
+        pendingAvatarFile = null;
+        pendingAvatarUrl = null;
+        pendingAvatarReset = false;
     } catch (error) {
         hideLoading();
         console.error('Failed to update profile:', error);
@@ -2605,7 +2738,7 @@ async function handleFriendSearch() {
 
             return `
                 <div class="search-result-item" data-user-id="${u.id}">
-                    <div class="search-result-avatar">${getInitials(u.name)}</div>
+                    <div class="search-result-avatar">${renderAvatarContent(u.avatar, u.name)}</div>
                     <div class="search-result-info">
                         <div class="search-result-name">${u.name}</div>
                         <div class="search-result-id">@${u.username}</div>
@@ -2882,6 +3015,10 @@ function setupEventListeners() {
 
     // Profile Edit Modal
     elements.profileEditForm.addEventListener('submit', handleProfileEdit);
+    elements.avatarUploadBtn.addEventListener('click', () => elements.avatarFileInput.click());
+    elements.avatarFileInput.addEventListener('change', handleAvatarFileSelect);
+    elements.avatarFromPhotosBtn.addEventListener('click', openAvatarPhotoPicker);
+    elements.avatarResetBtn.addEventListener('click', handleAvatarReset);
 
     // Keyboard shortcuts
     setupKeyboardShortcuts();

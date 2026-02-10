@@ -906,6 +906,31 @@ export async function getUserProfile(userId) {
 }
 
 /**
+ * Upload avatar image to Supabase Storage
+ * Stores in photos bucket under avatars/{userId}.{ext}
+ * Uses upsert to overwrite previous avatar
+ */
+export async function uploadAvatar(userId, file) {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `avatars/${userId}.${fileExt}`;
+
+    const { error: uploadError } = await supabase.storage
+        .from('photos')
+        .upload(fileName, file, { upsert: true });
+
+    if (uploadError) {
+        throw new ApiError(500, `Avatar upload failed: ${uploadError.message}`);
+    }
+
+    const { data: urlData } = supabase.storage
+        .from('photos')
+        .getPublicUrl(fileName);
+
+    // Append timestamp to bust browser cache
+    return urlData.publicUrl + '?t=' + Date.now();
+}
+
+/**
  * Update user profile in Supabase
  */
 export async function updateUserProfile(userId, updates) {
@@ -1339,6 +1364,7 @@ export default {
     searchUsers,
 
     // User
+    uploadAvatar,
     getUserProfile,
     updateUserProfile,
     updateLastSync,
