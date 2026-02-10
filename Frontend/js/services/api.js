@@ -912,7 +912,7 @@ export async function getUserProfile(userId) {
  */
 export async function uploadAvatar(userId, file) {
     const fileExt = file.name.split('.').pop();
-    const fileName = `avatars/${userId}.${fileExt}`;
+    const fileName = `${userId}/avatar.${fileExt}`;
 
     const { error: uploadError } = await supabase.storage
         .from('photos')
