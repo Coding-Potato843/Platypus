@@ -575,6 +575,7 @@ const elements = {
     friendListModalBody: document.getElementById('friendListModalBody'),
     editProfileBtn: document.getElementById('editProfileBtn'),
     deleteAccountBtn: document.getElementById('deleteAccountBtn'),
+    blockFriendRequestsToggle: document.getElementById('blockFriendRequestsToggle'),
 
     // Other
     loadingOverlay: document.getElementById('loadingOverlay'),
@@ -928,6 +929,22 @@ async function handleDeleteAccount() {
     }
 }
 
+async function handleBlockFriendRequestsToggle(e) {
+    const user = getCurrentUser();
+    if (!user) return;
+
+    const checked = e.target.checked;
+    try {
+        await updateUserProfile(user.id, { block_friend_requests: checked });
+        showToast(checked ? '친구 요청 거부가 활성화되었습니다' : '친구 요청 거부가 비활성화되었습니다', 'success');
+    } catch (error) {
+        console.error('Failed to update block friend requests setting:', error);
+        // Revert toggle on failure
+        e.target.checked = !checked;
+        showToast('설정 변경에 실패했습니다', 'error');
+    }
+}
+
 /**
  * Update UI for authenticated user
  * @param {boolean} showLoadingOverlay - Whether to show loading overlay during data load (default: true)
@@ -954,6 +971,8 @@ async function updateUIForAuthenticatedUser(showLoadingOverlay = true) {
         // Display avatar if set
         const avatarElement = document.getElementById('userAvatar');
         setAvatarDisplay(avatarElement, profile.avatar_url || null);
+        // Set block friend requests toggle
+        elements.blockFriendRequestsToggle.checked = !!profile.block_friend_requests;
     } else {
         // Fallback to auth user data
         elements.userName.textContent = user.user_metadata?.display_name || user.email;
@@ -962,6 +981,7 @@ async function updateUIForAuthenticatedUser(showLoadingOverlay = true) {
         elements.joinDate.textContent = `가입일: ${formatDate(user.created_at)}`;
         elements.lastSync.textContent = '마지막 스캔: 없음';
         state.lastSyncDate = null;
+        elements.blockFriendRequestsToggle.checked = false;
     }
 
     // Load user stats from Supabase
@@ -1001,6 +1021,9 @@ function updateUIForUnauthenticatedUser() {
     elements.photoCount.textContent = '0';
     elements.friendCount.textContent = '0';
     elements.storageUsed.textContent = '0 MB';
+
+    // Reset block friend requests toggle
+    elements.blockFriendRequestsToggle.checked = false;
 
     // Reset sync state
     state.lastSyncDate = null;
@@ -2990,6 +3013,8 @@ async function sendFriendRequestFromSearch(friendId, friendName, buttonElement) 
             showToast('이미 요청을 보냈습니다', 'warning');
         } else if (error.message === 'They already sent you a request') {
             showToast('상대방이 이미 요청을 보냈습니다. 받은 요청을 확인하세요.', 'info');
+        } else if (error.message === 'User has blocked friend requests') {
+            showToast('해당 사용자가 친구 요청을 거부하고 있습니다', 'warning');
         } else {
             showToast('친구 요청에 실패했습니다', 'error');
         }
@@ -3188,6 +3213,9 @@ function setupEventListeners() {
     });
 
     elements.editProfileBtn.addEventListener('click', openProfileEditModal);
+
+    // Block friend requests toggle
+    elements.blockFriendRequestsToggle.addEventListener('change', handleBlockFriendRequestsToggle);
 
     // Profile Edit Modal
     elements.profileEditForm.addEventListener('submit', handleProfileEdit);

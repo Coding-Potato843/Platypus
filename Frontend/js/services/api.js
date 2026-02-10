@@ -643,15 +643,20 @@ export async function getFriendsPhotos(userId, params = {}) {
  * Send a friend request (creates pending friendship)
  */
 export async function sendFriendRequest(userId, friendId) {
-    // Check if friend user exists
+    // Check if friend user exists and their block setting
     const { data: friendUser, error: userError } = await supabase
         .from('users')
-        .select('id')
+        .select('id, block_friend_requests')
         .eq('id', friendId)
         .single();
 
     if (userError || !friendUser) {
         throw new ApiError(404, 'User not found');
+    }
+
+    // Check if the target user blocks friend requests
+    if (friendUser.block_friend_requests) {
+        throw new ApiError(403, 'User has blocked friend requests');
     }
 
     // Check if friendship exists in EITHER direction
