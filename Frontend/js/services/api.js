@@ -914,9 +914,12 @@ export async function uploadAvatar(userId, file) {
     const fileExt = file.name.split('.').pop();
     const fileName = `${userId}/avatar.${fileExt}`;
 
+    // Delete existing avatar first (storage has no UPDATE policy, only INSERT/DELETE)
+    await supabase.storage.from('photos').remove([fileName]);
+
     const { error: uploadError } = await supabase.storage
         .from('photos')
-        .upload(fileName, file, { upsert: true });
+        .upload(fileName, file);
 
     if (uploadError) {
         throw new ApiError(500, `Avatar upload failed: ${uploadError.message}`);
