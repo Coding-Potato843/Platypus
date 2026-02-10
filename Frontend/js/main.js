@@ -576,6 +576,7 @@ const elements = {
     editProfileBtn: document.getElementById('editProfileBtn'),
     deleteAccountBtn: document.getElementById('deleteAccountBtn'),
     blockFriendRequestsToggle: document.getElementById('blockFriendRequestsToggle'),
+    lockPhotoDownloadsToggle: document.getElementById('lockPhotoDownloadsToggle'),
 
     // Other
     loadingOverlay: document.getElementById('loadingOverlay'),
@@ -939,7 +940,21 @@ async function handleBlockFriendRequestsToggle(e) {
         showToast(checked ? '친구 요청 거부가 활성화되었습니다' : '친구 요청 거부가 비활성화되었습니다', 'success');
     } catch (error) {
         console.error('Failed to update block friend requests setting:', error);
-        // Revert toggle on failure
+        e.target.checked = !checked;
+        showToast('설정 변경에 실패했습니다', 'error');
+    }
+}
+
+async function handleLockPhotoDownloadsToggle(e) {
+    const user = getCurrentUser();
+    if (!user) return;
+
+    const checked = e.target.checked;
+    try {
+        await updateUserProfile(user.id, { lock_photo_downloads: checked });
+        showToast(checked ? '다운로드 잠금이 활성화되었습니다' : '다운로드 잠금이 비활성화되었습니다', 'success');
+    } catch (error) {
+        console.error('Failed to update lock photo downloads setting:', error);
         e.target.checked = !checked;
         showToast('설정 변경에 실패했습니다', 'error');
     }
@@ -971,8 +986,9 @@ async function updateUIForAuthenticatedUser(showLoadingOverlay = true) {
         // Display avatar if set
         const avatarElement = document.getElementById('userAvatar');
         setAvatarDisplay(avatarElement, profile.avatar_url || null);
-        // Set block friend requests toggle
+        // Set toggles
         elements.blockFriendRequestsToggle.checked = !!profile.block_friend_requests;
+        elements.lockPhotoDownloadsToggle.checked = !!profile.lock_photo_downloads;
     } else {
         // Fallback to auth user data
         elements.userName.textContent = user.user_metadata?.display_name || user.email;
@@ -982,6 +998,7 @@ async function updateUIForAuthenticatedUser(showLoadingOverlay = true) {
         elements.lastSync.textContent = '마지막 스캔: 없음';
         state.lastSyncDate = null;
         elements.blockFriendRequestsToggle.checked = false;
+        elements.lockPhotoDownloadsToggle.checked = false;
     }
 
     // Load user stats from Supabase
@@ -1022,8 +1039,9 @@ function updateUIForUnauthenticatedUser() {
     elements.friendCount.textContent = '0';
     elements.storageUsed.textContent = '0 MB';
 
-    // Reset block friend requests toggle
+    // Reset toggles
     elements.blockFriendRequestsToggle.checked = false;
+    elements.lockPhotoDownloadsToggle.checked = false;
 
     // Reset sync state
     state.lastSyncDate = null;
@@ -1536,6 +1554,13 @@ function openPhotoModal(photoId) {
         elements.photoAuthorItem.style.display = 'none';
     }
 
+    // Show/hide download button based on download lock
+    if (photo.downloadLocked) {
+        elements.downloadPhotoBtn.style.display = 'none';
+    } else {
+        elements.downloadPhotoBtn.style.display = '';
+    }
+
     // Render group toggles
     renderGroupToggles(photo);
 
@@ -1548,6 +1573,11 @@ async function handlePhotoDownload() {
 
     if (!photo) {
         showToast('사진을 찾을 수 없습니다', 'error');
+        return;
+    }
+
+    if (photo.downloadLocked) {
+        showToast('이 사진의 소유자가 다운로드를 잠금 설정했습니다', 'warning');
         return;
     }
 
@@ -3216,6 +3246,7 @@ function setupEventListeners() {
 
     // Block friend requests toggle
     elements.blockFriendRequestsToggle.addEventListener('change', handleBlockFriendRequestsToggle);
+    elements.lockPhotoDownloadsToggle.addEventListener('change', handleLockPhotoDownloadsToggle);
 
     // Profile Edit Modal
     elements.profileEditForm.addEventListener('submit', handleProfileEdit);

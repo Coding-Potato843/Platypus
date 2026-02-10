@@ -1312,6 +1312,12 @@ body {
     line-height: 1.4;
 }
 
+.setting-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: var(--spacing-sm) 0;
+}
+
 /* Toggle Switch */
 .toggle-switch {
     position: relative;
