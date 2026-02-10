@@ -1165,6 +1165,117 @@ body {
     padding: 0 4px;
 }
 
+/* Friend Sub-Tabs */
+.friend-sub-tabs-container {
+    margin-bottom: var(--spacing-lg);
+}
+
+.friend-sub-tab-header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+}
+
+.friend-sub-tab-nav {
+    display: flex;
+    flex: 1;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    padding: 3px;
+    gap: 2px;
+}
+
+.friend-sub-tab-btn {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: none;
+    border: none;
+    color: var(--text-tertiary);
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    border-radius: var(--border-radius-sm);
+    white-space: nowrap;
+}
+
+.friend-sub-tab-btn:hover {
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.friend-sub-tab-btn.active {
+    color: var(--primary-400);
+    background: var(--bg-elevated);
+    font-weight: 600;
+}
+
+.friend-sub-tab-badge {
+    background: var(--danger);
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 700;
+    min-width: 16px;
+    height: 16px;
+    border-radius: var(--border-radius-full);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+}
+
+.friend-sub-tab-content {
+    display: none;
+    animation: fadeIn var(--transition-normal);
+}
+
+.friend-sub-tab-content.active {
+    display: block;
+}
+
+.friend-sub-tab-action-bar {
+    margin-top: var(--spacing-sm);
+}
+
+.friend-sub-tab-content-area {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-lg);
+    padding: var(--spacing-md);
+    height: 388px;
+    overflow-y: auto;
+}
+
+.btn-show-more {
+    margin-top: var(--spacing-sm);
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+/* Friend List Modal (Show More) */
+.friend-list-modal-content {
+    width: 500px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.friend-list-modal-body {
+    padding: var(--spacing-lg);
+    overflow-y: auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
 /* Account Actions */
 .account-actions {
     display: flex;
@@ -2297,6 +2408,11 @@ body {
         max-width: 100vw;
         border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
         max-height: 85vh;
+    }
+
+    .friend-sub-tab-btn {
+        font-size: 0.75rem;
+        padding: var(--spacing-xs) var(--spacing-sm);
     }
 }
 

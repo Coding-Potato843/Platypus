@@ -41,6 +41,7 @@ import {
     unsubscribeFromRealtime
 } from './services/api.js';
 import { extractExifData, getFileDate, reverseGeocode } from './utils/exif.js';
+import { Tabs } from './components/tabs.js';
 
 // ============================================
 // Mock Data (Replace with API calls)
@@ -559,16 +560,19 @@ const elements = {
     friendCount: document.getElementById('friendCount'),
     storageUsed: document.getElementById('storageUsed'),
     friendsList: document.getElementById('friendsList'),
-    receivedRequestsSection: document.getElementById('receivedRequestsSection'),
     receivedRequestsList: document.getElementById('receivedRequestsList'),
     receivedRequestCount: document.getElementById('receivedRequestCount'),
-    sentRequestsSection: document.getElementById('sentRequestsSection'),
     sentRequestsList: document.getElementById('sentRequestsList'),
     sentRequestCount: document.getElementById('sentRequestCount'),
     accountRequestBadge: document.getElementById('accountRequestBadge'),
     logoutBtn: document.getElementById('logoutBtn'),
     addFriendBtn: document.getElementById('addFriendBtn'),
     sendFriendRequestBtn: document.getElementById('sendFriendRequestBtn'),
+    friendSubTabActionBar: document.getElementById('friendSubTabActionBar'),
+    friendListModal: document.getElementById('friendListModal'),
+    friendListModalTitle: document.getElementById('friendListModalTitle'),
+    friendListModalIcon: document.getElementById('friendListModalIcon'),
+    friendListModalBody: document.getElementById('friendListModalBody'),
     editProfileBtn: document.getElementById('editProfileBtn'),
     deleteAccountBtn: document.getElementById('deleteAccountBtn'),
 
@@ -2266,6 +2270,70 @@ function renderAccountInfo() {
     renderFriendsList();
 }
 
+const MAX_INLINE_ITEMS = 5;
+
+function renderFriendItemHtml(friend) {
+    const nickname = state.friendNicknames[friend.id];
+    const nicknameHtml = nickname
+        ? ` <span class="friend-nickname">${nickname}</span>`
+        : '';
+
+    return `
+        <div class="friend-item" data-friend-id="${friend.id}">
+            <div class="friend-avatar">${renderAvatarContent(friend.avatar, friend.name)}</div>
+            <div class="friend-info">
+                <div class="friend-name">${friend.name}${nicknameHtml}</div>
+                <div class="friend-id">@${friend.username}</div>
+            </div>
+            <button class="friend-edit-nickname-btn" aria-label="별명 수정" data-tooltip="별명 ${nickname ? '수정' : '설정'}">
+                <i class="ph ph-pencil-simple"></i>
+            </button>
+            <button class="friend-remove-btn" aria-label="친구 삭제">
+                <i class="ph ph-x"></i>
+            </button>
+        </div>
+    `;
+}
+
+function attachFriendListHandlers(container) {
+    container.querySelectorAll('.friend-edit-nickname-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const friendId = btn.closest('.friend-item').dataset.friendId;
+            editFriendNickname(friendId);
+        });
+    });
+    container.querySelectorAll('.friend-remove-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const friendId = btn.closest('.friend-item').dataset.friendId;
+            confirmRemoveFriend(friendId);
+        });
+    });
+}
+
+function attachReceivedRequestHandlers(container) {
+    container.querySelectorAll('.request-accept-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const friendshipId = btn.closest('.request-item').dataset.friendshipId;
+            handleAcceptRequest(friendshipId);
+        });
+    });
+    container.querySelectorAll('.request-reject-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const friendshipId = btn.closest('.request-item').dataset.friendshipId;
+            handleRejectRequest(friendshipId);
+        });
+    });
+}
+
+function attachSentRequestHandlers(container) {
+    container.querySelectorAll('.request-cancel-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const friendshipId = btn.closest('.request-item').dataset.friendshipId;
+            handleCancelRequest(friendshipId);
+        });
+    });
+}
+
 function renderFriendsList() {
     if (state.friends.length === 0) {
         elements.friendsList.innerHTML = `
@@ -2277,44 +2345,20 @@ function renderFriendsList() {
         return;
     }
 
-    elements.friendsList.innerHTML = state.friends.map(friend => {
-        const nickname = state.friendNicknames[friend.id];
-        const nicknameHtml = nickname
-            ? ` <span class="friend-nickname">${nickname}</span>`
-            : '';
+    const displayFriends = state.friends.slice(0, MAX_INLINE_ITEMS);
+    elements.friendsList.innerHTML = displayFriends.map(renderFriendItemHtml).join('');
 
-        return `
-            <div class="friend-item" data-friend-id="${friend.id}">
-                <div class="friend-avatar">${renderAvatarContent(friend.avatar, friend.name)}</div>
-                <div class="friend-info">
-                    <div class="friend-name">${friend.name}${nicknameHtml}</div>
-                    <div class="friend-id">@${friend.username}</div>
-                </div>
-                <button class="friend-edit-nickname-btn" aria-label="별명 수정" data-tooltip="별명 ${nickname ? '수정' : '설정'}">
-                    <i class="ph ph-pencil-simple"></i>
-                </button>
-                <button class="friend-remove-btn" aria-label="친구 삭제">
-                    <i class="ph ph-x"></i>
-                </button>
-            </div>
+    if (state.friends.length > MAX_INLINE_ITEMS) {
+        elements.friendsList.innerHTML += `
+            <button class="btn btn-secondary btn-full btn-show-more" data-list-type="friends">
+                <i class="ph ph-dots-three"></i>
+                <span>더보기 (${state.friends.length}명)</span>
+            </button>
         `;
-    }).join('');
+        elements.friendsList.querySelector('.btn-show-more').addEventListener('click', () => openFriendListModal('friends'));
+    }
 
-    // Add edit nickname handlers
-    elements.friendsList.querySelectorAll('.friend-edit-nickname-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const friendId = btn.closest('.friend-item').dataset.friendId;
-            editFriendNickname(friendId);
-        });
-    });
-
-    // Add remove handlers
-    elements.friendsList.querySelectorAll('.friend-remove-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const friendId = btn.closest('.friend-item').dataset.friendId;
-            confirmRemoveFriend(friendId);
-        });
-    });
+    attachFriendListHandlers(elements.friendsList);
 }
 
 function editFriendNickname(friendId) {
@@ -2347,6 +2391,7 @@ function editFriendNickname(friendId) {
             }
             renderFriendsList();
             closeModal(elements.nicknameModal);
+            closeFriendListModalIfOpen();
         } catch (error) {
             console.error('Failed to update nickname:', error);
             showToast('별명 설정에 실패했습니다', 'error');
@@ -2360,23 +2405,8 @@ function editFriendNickname(friendId) {
 // ============================================
 // Friend Request Rendering
 // ============================================
-function renderReceivedRequests() {
-    const list = elements.receivedRequestsList;
-    const requests = state.pendingRequests.received;
-
-    if (requests.length === 0) {
-        elements.receivedRequestCount.textContent = '';
-        list.innerHTML = `
-            <div class="gallery-empty" style="padding: 1.5rem 0;">
-                <p>받은 친구 요청이 없습니다</p>
-            </div>
-        `;
-        return;
-    }
-
-    elements.receivedRequestCount.textContent = requests.length;
-
-    list.innerHTML = requests.map(req => `
+function renderReceivedRequestItemHtml(req) {
+    return `
         <div class="request-item" data-friendship-id="${req.friendshipId}">
             <div class="friend-avatar">${renderAvatarContent(req.avatar, req.name)}</div>
             <div class="friend-info">
@@ -2392,41 +2422,11 @@ function renderReceivedRequests() {
                 </button>
             </div>
         </div>
-    `).join('');
-
-    // Add event handlers
-    list.querySelectorAll('.request-accept-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const friendshipId = btn.closest('.request-item').dataset.friendshipId;
-            handleAcceptRequest(friendshipId);
-        });
-    });
-
-    list.querySelectorAll('.request-reject-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const friendshipId = btn.closest('.request-item').dataset.friendshipId;
-            handleRejectRequest(friendshipId);
-        });
-    });
+    `;
 }
 
-function renderSentRequests() {
-    const list = elements.sentRequestsList;
-    const requests = state.pendingRequests.sent;
-
-    if (requests.length === 0) {
-        elements.sentRequestCount.textContent = '';
-        list.innerHTML = `
-            <div class="gallery-empty" style="padding: 1.5rem 0;">
-                <p>보낸 친구 요청이 없습니다</p>
-            </div>
-        `;
-        return;
-    }
-
-    elements.sentRequestCount.textContent = requests.length;
-
-    list.innerHTML = requests.map(req => `
+function renderSentRequestItemHtml(req) {
+    return `
         <div class="request-item" data-friendship-id="${req.friendshipId}">
             <div class="friend-avatar">${renderAvatarContent(req.avatar, req.name)}</div>
             <div class="friend-info">
@@ -2438,25 +2438,126 @@ function renderSentRequests() {
                 <span>취소</span>
             </button>
         </div>
-    `).join('');
+    `;
+}
 
-    list.querySelectorAll('.request-cancel-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const friendshipId = btn.closest('.request-item').dataset.friendshipId;
-            handleCancelRequest(friendshipId);
-        });
-    });
+function renderReceivedRequests() {
+    const list = elements.receivedRequestsList;
+    const requests = state.pendingRequests.received;
+
+    if (requests.length === 0) {
+        list.innerHTML = `
+            <div class="gallery-empty" style="padding: 1.5rem 0;">
+                <p>받은 친구 요청이 없습니다</p>
+            </div>
+        `;
+        return;
+    }
+
+    const displayRequests = requests.slice(0, MAX_INLINE_ITEMS);
+    list.innerHTML = displayRequests.map(renderReceivedRequestItemHtml).join('');
+
+    if (requests.length > MAX_INLINE_ITEMS) {
+        list.innerHTML += `
+            <button class="btn btn-secondary btn-full btn-show-more" data-list-type="received">
+                <i class="ph ph-dots-three"></i>
+                <span>더보기 (${requests.length}건)</span>
+            </button>
+        `;
+        list.querySelector('.btn-show-more').addEventListener('click', () => openFriendListModal('received'));
+    }
+
+    attachReceivedRequestHandlers(list);
+}
+
+function renderSentRequests() {
+    const list = elements.sentRequestsList;
+    const requests = state.pendingRequests.sent;
+
+    if (requests.length === 0) {
+        list.innerHTML = `
+            <div class="gallery-empty" style="padding: 1.5rem 0;">
+                <p>보낸 친구 요청이 없습니다</p>
+            </div>
+        `;
+        return;
+    }
+
+    const displayRequests = requests.slice(0, MAX_INLINE_ITEMS);
+    list.innerHTML = displayRequests.map(renderSentRequestItemHtml).join('');
+
+    if (requests.length > MAX_INLINE_ITEMS) {
+        list.innerHTML += `
+            <button class="btn btn-secondary btn-full btn-show-more" data-list-type="sent">
+                <i class="ph ph-dots-three"></i>
+                <span>더보기 (${requests.length}건)</span>
+            </button>
+        `;
+        list.querySelector('.btn-show-more').addEventListener('click', () => openFriendListModal('sent'));
+    }
+
+    attachSentRequestHandlers(list);
 }
 
 function updateRequestBadges() {
     const receivedCount = state.pendingRequests.received.length;
+    const sentCount = state.pendingRequests.sent.length;
 
-    // Badge on Account tab
+    // Badge on main Account tab
     if (receivedCount > 0) {
         elements.accountRequestBadge.textContent = receivedCount;
         elements.accountRequestBadge.style.display = 'inline-flex';
     } else {
         elements.accountRequestBadge.style.display = 'none';
+    }
+
+    // Badge on "받은 요청" sub-tab
+    if (receivedCount > 0) {
+        elements.receivedRequestCount.textContent = receivedCount;
+        elements.receivedRequestCount.style.display = 'inline-flex';
+    } else {
+        elements.receivedRequestCount.style.display = 'none';
+    }
+
+    // Badge on "보낸 요청" sub-tab
+    if (sentCount > 0) {
+        elements.sentRequestCount.textContent = sentCount;
+        elements.sentRequestCount.style.display = 'inline-flex';
+    } else {
+        elements.sentRequestCount.style.display = 'none';
+    }
+}
+
+function openFriendListModal(type) {
+    const config = {
+        friends: { title: '친구 목록', icon: 'ph-users' },
+        received: { title: '받은 친구 요청', icon: 'ph-user-circle-check' },
+        sent: { title: '보낸 친구 요청', icon: 'ph-paper-plane-tilt' },
+    };
+
+    const { title, icon } = config[type];
+    elements.friendListModalTitle.textContent = title;
+    elements.friendListModalIcon.className = `ph ${icon}`;
+
+    const body = elements.friendListModalBody;
+
+    if (type === 'friends') {
+        body.innerHTML = state.friends.map(renderFriendItemHtml).join('');
+        attachFriendListHandlers(body);
+    } else if (type === 'received') {
+        body.innerHTML = state.pendingRequests.received.map(renderReceivedRequestItemHtml).join('');
+        attachReceivedRequestHandlers(body);
+    } else if (type === 'sent') {
+        body.innerHTML = state.pendingRequests.sent.map(renderSentRequestItemHtml).join('');
+        attachSentRequestHandlers(body);
+    }
+
+    openModal(elements.friendListModal);
+}
+
+function closeFriendListModalIfOpen() {
+    if (elements.friendListModal.classList.contains('active')) {
+        closeModal(elements.friendListModal);
     }
 }
 
@@ -2476,6 +2577,7 @@ async function handleAcceptRequest(friendshipId) {
         await loadFriendPhotos();
         elements.friendCount.textContent = state.friends.length;
         setupFriendPhotosSubscription();
+        closeFriendListModalIfOpen();
     } catch (error) {
         console.error('Failed to accept request:', error);
         showToast('친구 요청 수락에 실패했습니다', 'error');
@@ -2490,6 +2592,7 @@ async function handleRejectRequest(friendshipId) {
         await apiRejectFriendRequest(user.id, friendshipId);
         showToast('친구 요청을 거절했습니다', 'info');
         await loadPendingRequests();
+        closeFriendListModalIfOpen();
     } catch (error) {
         console.error('Failed to reject request:', error);
         showToast('친구 요청 거절에 실패했습니다', 'error');
@@ -2504,6 +2607,7 @@ async function handleCancelRequest(friendshipId) {
         await apiCancelFriendRequest(user.id, friendshipId);
         showToast('친구 요청을 취소했습니다', 'info');
         await loadPendingRequests();
+        closeFriendListModalIfOpen();
     } catch (error) {
         console.error('Failed to cancel request:', error);
         showToast('친구 요청 취소에 실패했습니다', 'error');
@@ -2527,6 +2631,7 @@ function confirmRemoveFriend(friendId) {
             delete state.friendNicknames[friendId];
             renderFriendsList();
             showToast('친구가 삭제되었습니다', 'success');
+            closeFriendListModalIfOpen();
         } catch (error) {
             console.error('Failed to remove friend:', error);
             showToast('친구 삭제에 실패했습니다', 'error');
@@ -3100,6 +3205,13 @@ function setupEventListeners() {
             e.preventDefault();
             elements.nicknameSaveBtn.click();
         }
+    });
+
+    // Friend sub-tabs (inside Account tab)
+    new Tabs({
+        buttonSelector: '.friend-sub-tab-btn',
+        contentSelector: '.friend-sub-tab-content',
+        defaultTab: 'friend-list',
     });
 
     // Keyboard shortcuts
