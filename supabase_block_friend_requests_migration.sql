@@ -3,6 +3,6 @@
 -- lock_photo_downloads: prevents friends from downloading this user's photos
 
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS block_friend_requests BOOLEAN DEFAULT false;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS lock_photo_downloads BOOLEAN DEFAULT false;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS lock_photo_downloads BOOLEAN DEFAULT true;
 
 NOTIFY pgrst, 'reload schema';

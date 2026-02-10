@@ -998,7 +998,7 @@ async function updateUIForAuthenticatedUser(showLoadingOverlay = true) {
         elements.lastSync.textContent = '마지막 스캔: 없음';
         state.lastSyncDate = null;
         elements.blockFriendRequestsToggle.checked = false;
-        elements.lockPhotoDownloadsToggle.checked = false;
+        elements.lockPhotoDownloadsToggle.checked = true;
     }
 
     // Load user stats from Supabase
@@ -1554,11 +1554,23 @@ function openPhotoModal(photoId) {
         elements.photoAuthorItem.style.display = 'none';
     }
 
-    // Show/hide download button based on download lock
-    if (photo.downloadLocked) {
-        elements.downloadPhotoBtn.style.display = 'none';
-    } else {
+    // Friend photo: hide delete, disable download if locked
+    const isFriendPhoto = !!photo.author;
+    if (isFriendPhoto) {
+        elements.deletePhotoBtn.style.display = 'none';
         elements.downloadPhotoBtn.style.display = '';
+        if (photo.downloadLocked) {
+            elements.downloadPhotoBtn.disabled = true;
+            elements.downloadPhotoBtn.setAttribute('data-tooltip', '해당 사진의 주인이 다운로드를 허용하지 않았습니다.');
+        } else {
+            elements.downloadPhotoBtn.disabled = false;
+            elements.downloadPhotoBtn.removeAttribute('data-tooltip');
+        }
+    } else {
+        elements.deletePhotoBtn.style.display = '';
+        elements.downloadPhotoBtn.style.display = '';
+        elements.downloadPhotoBtn.disabled = false;
+        elements.downloadPhotoBtn.removeAttribute('data-tooltip');
     }
 
     // Render group toggles
