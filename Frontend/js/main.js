@@ -27,6 +27,9 @@ import {
     getFriendshipStatuses,
     removeFriend as apiRemoveFriend,
     searchUsers,
+    getFriendNicknames,
+    setFriendNickname,
+    removeFriendNickname,
     getUserStats,
     uploadAvatar,
     updateUserProfile,
@@ -214,7 +217,19 @@ async function loadFriends() {
         renderFriendsList();
     } catch (error) {
         console.error('Failed to load friends:', error);
-        // Keep mock data as fallback
+    }
+}
+
+async function loadFriendNicknames() {
+    const user = getCurrentUser();
+    if (!user) return;
+
+    try {
+        state.friendNicknames = await getFriendNicknames(user.id);
+        renderFriendsList();
+    } catch (error) {
+        console.error('Failed to load friend nicknames:', error);
+        state.friendNicknames = {};
     }
 }
 
@@ -251,6 +266,7 @@ async function loadAllUserData(showLoadingOverlay = true) {
             loadGroups(),
             loadFriendPhotos(),
             loadFriends(),
+            loadFriendNicknames(),
             loadPendingRequests(),
         ]);
     } catch (error) {
@@ -396,6 +412,7 @@ const state = {
     photos: [],
     friendPhotos: [],
     friends: [],
+    friendNicknames: {},
     pendingRequests: { received: [], sent: [] },
     groups: [], // Groups are loaded from Supabase
     currentTab: 'my-photos',
@@ -585,6 +602,13 @@ const elements = {
     // Avatar Photo Picker Modal Elements
     avatarPhotoPickerModal: document.getElementById('avatarPhotoPickerModal'),
     avatarPhotoGrid: document.getElementById('avatarPhotoGrid'),
+
+    // Nickname Modal Elements
+    nicknameModal: document.getElementById('nicknameModal'),
+    nicknameModalTitle: document.getElementById('nicknameModalTitle'),
+    nicknameInput: document.getElementById('nicknameInput'),
+    nicknameCharCount: document.getElementById('nicknameCharCount'),
+    nicknameSaveBtn: document.getElementById('nicknameSaveBtn'),
 
     // Add Friend Modal Elements
     addFriendModal: document.getElementById('addFriendModal'),
@@ -2253,26 +2277,84 @@ function renderFriendsList() {
         return;
     }
 
-    elements.friendsList.innerHTML = state.friends.map(friend => `
-        <div class="friend-item" data-friend-id="${friend.id}">
-            <div class="friend-avatar">${renderAvatarContent(friend.avatar, friend.name)}</div>
-            <div class="friend-info">
-                <div class="friend-name">${friend.name}</div>
-                <div class="friend-id">@${friend.username}</div>
+    elements.friendsList.innerHTML = state.friends.map(friend => {
+        const nickname = state.friendNicknames[friend.id];
+        const nicknameHtml = nickname
+            ? ` <span class="friend-nickname">${nickname}</span>`
+            : '';
+
+        return `
+            <div class="friend-item" data-friend-id="${friend.id}">
+                <div class="friend-avatar">${renderAvatarContent(friend.avatar, friend.name)}</div>
+                <div class="friend-info">
+                    <div class="friend-name">${friend.name}${nicknameHtml}</div>
+                    <div class="friend-id">@${friend.username}</div>
+                </div>
+                <button class="friend-edit-nickname-btn" aria-label="별명 수정" title="별명 ${nickname ? '수정' : '설정'}">
+                    <i class="ph ph-pencil-simple"></i>
+                </button>
+                <button class="friend-remove-btn" aria-label="친구 삭제">
+                    <i class="ph ph-x"></i>
+                </button>
             </div>
-            <button class="friend-remove-btn" aria-label="친구 삭제">
-                <i class="ph ph-x"></i>
-            </button>
-        </div>
-    `).join('');
+        `;
+    }).join('');
+
+    // Add edit nickname handlers
+    elements.friendsList.querySelectorAll('.friend-edit-nickname-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const friendId = btn.closest('.friend-item').dataset.friendId;
+            editFriendNickname(friendId);
+        });
+    });
 
     // Add remove handlers
     elements.friendsList.querySelectorAll('.friend-remove-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+        btn.addEventListener('click', () => {
             const friendId = btn.closest('.friend-item').dataset.friendId;
             confirmRemoveFriend(friendId);
         });
     });
+}
+
+function editFriendNickname(friendId) {
+    const friend = state.friends.find(f => f.id === friendId);
+    if (!friend) return;
+
+    const currentNickname = state.friendNicknames[friendId] || '';
+
+    elements.nicknameModalTitle.textContent = `${friend.name}님의 별명`;
+    elements.nicknameInput.value = currentNickname;
+    elements.nicknameCharCount.textContent = currentNickname.length;
+
+    elements.nicknameSaveBtn.onclick = async () => {
+        const user = getCurrentUser();
+        if (!user) return;
+
+        const newNickname = elements.nicknameInput.value.trim();
+
+        try {
+            if (newNickname === '') {
+                if (currentNickname) {
+                    await removeFriendNickname(user.id, friendId);
+                    delete state.friendNicknames[friendId];
+                    showToast('별명이 삭제되었습니다', 'success');
+                }
+            } else {
+                await setFriendNickname(user.id, friendId, newNickname);
+                state.friendNicknames[friendId] = newNickname;
+                showToast(currentNickname ? '별명이 수정되었습니다' : '별명이 설정되었습니다', 'success');
+            }
+            renderFriendsList();
+            closeModal(elements.nicknameModal);
+        } catch (error) {
+            console.error('Failed to update nickname:', error);
+            showToast('별명 설정에 실패했습니다', 'error');
+        }
+    };
+
+    openModal(elements.nicknameModal);
+    elements.nicknameInput.focus();
 }
 
 // ============================================
@@ -2442,6 +2524,7 @@ function confirmRemoveFriend(friendId) {
         try {
             await apiRemoveFriend(user.id, friendId);
             state.friends = state.friends.filter(f => f.id !== friendId);
+            delete state.friendNicknames[friendId];
             renderFriendsList();
             showToast('친구가 삭제되었습니다', 'success');
         } catch (error) {
@@ -3007,6 +3090,17 @@ function setupEventListeners() {
     elements.avatarFileInput.addEventListener('change', handleAvatarFileSelect);
     elements.avatarFromPhotosBtn.addEventListener('click', openAvatarPhotoPicker);
     elements.avatarResetBtn.addEventListener('click', handleAvatarReset);
+
+    // Nickname modal
+    elements.nicknameInput.addEventListener('input', () => {
+        elements.nicknameCharCount.textContent = elements.nicknameInput.value.length;
+    });
+    elements.nicknameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            elements.nicknameSaveBtn.click();
+        }
+    });
 
     // Keyboard shortcuts
     setupKeyboardShortcuts();

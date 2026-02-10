@@ -885,6 +885,64 @@ export async function removeFriend(userId, friendId) {
 }
 
 // ============================================
+// Friend Nicknames API (Supabase)
+// ============================================
+
+/**
+ * Get all friend nicknames for a user
+ * @returns {Promise<Object>} Map of friendId -> nickname
+ */
+export async function getFriendNicknames(userId) {
+    const { data, error } = await supabase
+        .from('friend_nicknames')
+        .select('friend_id, nickname')
+        .eq('user_id', userId);
+
+    if (error) {
+        throw new ApiError(500, error.message);
+    }
+
+    const nicknameMap = {};
+    (data || []).forEach(row => {
+        nicknameMap[row.friend_id] = row.nickname;
+    });
+    return nicknameMap;
+}
+
+/**
+ * Set or update a friend's nickname (upsert)
+ */
+export async function setFriendNickname(userId, friendId, nickname) {
+    const { error } = await supabase
+        .from('friend_nicknames')
+        .upsert(
+            { user_id: userId, friend_id: friendId, nickname: nickname.trim() },
+            { onConflict: 'user_id,friend_id' }
+        );
+
+    if (error) {
+        throw new ApiError(500, error.message);
+    }
+    return { success: true };
+}
+
+/**
+ * Remove a friend's nickname
+ */
+export async function removeFriendNickname(userId, friendId) {
+    const { error } = await supabase
+        .from('friend_nicknames')
+        .delete()
+        .eq('user_id', userId)
+        .eq('friend_id', friendId);
+
+    if (error) {
+        throw new ApiError(500, error.message);
+    }
+    return { success: true };
+}
+
+// ============================================
 // User API (Supabase)
 // ============================================
 
@@ -1037,7 +1095,26 @@ export async function deleteUserAccount(userId) {
         throw new ApiError(500, `Failed to delete groups: ${groupsError.message}`);
     }
 
-    // 6. Delete friendships (where user is the owner)
+    // 6. Delete friend nicknames (set by user and set for user)
+    const { error: nicknames1Error } = await supabase
+        .from('friend_nicknames')
+        .delete()
+        .eq('user_id', userId);
+
+    if (nicknames1Error) {
+        console.warn('Error deleting friend nicknames (user_id):', nicknames1Error);
+    }
+
+    const { error: nicknames2Error } = await supabase
+        .from('friend_nicknames')
+        .delete()
+        .eq('friend_id', userId);
+
+    if (nicknames2Error) {
+        console.warn('Error deleting friend nicknames (friend_id):', nicknames2Error);
+    }
+
+    // 7. Delete friendships (where user is the owner)
     const { error: friendships1Error } = await supabase
         .from('friendships')
         .delete()
@@ -1365,6 +1442,11 @@ export default {
     getFriendshipStatuses,
     removeFriend,
     searchUsers,
+
+    // Friend Nicknames
+    getFriendNicknames,
+    setFriendNickname,
+    removeFriendNickname,
 
     // User
     uploadAvatar,

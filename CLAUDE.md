@@ -54,6 +54,7 @@ Project_02_Platypus/
 │   └── src/                          # screens/, services/, components/, hooks/, config/, types/
 ├── supabase_rls_setup.sql            # RLS policies for all tables
 ├── supabase_friend_request_migration.sql  # Friend request system migration
+├── supabase_friend_nicknames_migration.sql  # Friend nicknames migration
 └── CLAUDE.md
 ```
 
@@ -79,6 +80,12 @@ Project_02_Platypus/
 `id`, `user_id` (requester), `friend_id` (receiver), `status` ('pending'|'accepted'), `created_at`
 - UNIQUE on (user_id, friend_id); trigger blocks reverse-direction duplicates (A→B exists → B→A blocked)
 - All friend queries must check BOTH directions (user_id and friend_id)
+
+### friend_nicknames
+`id` (uuid PK), `user_id` (uuid FK→users, nickname setter), `friend_id` (uuid FK→users, nicknamed person), `nickname` (text), `created_at` (timestamp)
+- UNIQUE on (user_id, friend_id); one nickname per friend per user
+- Private: only visible to the setter (RLS restricts all ops to `user_id = auth.uid()`)
+- FK CASCADE: auto-deleted when either user is deleted
 
 ---
 
@@ -118,6 +125,11 @@ getPendingRequests(userId)                // Returns { received: [...], sent: [.
 getFriendshipStatuses(userId, otherUserIds)  // Batch status check for search results
 removeFriend(userId, friendId)
 searchUsers(searchTerm)
+
+// Friend Nicknames (private per-user)
+getFriendNicknames(userId)                    // Returns { friendId: nickname } map
+setFriendNickname(userId, friendId, nickname) // Upsert nickname
+removeFriendNickname(userId, friendId)        // Delete nickname
 
 // User
 getUserProfile(userId), updateUserProfile(userId, updates), updateLastSync(userId), getUserStats(userId)
@@ -171,7 +183,7 @@ getFileDate(file)
 - Realtime needs two `.on()` listeners per channel (Supabase doesn't support OR filters)
 
 ### Account Deletion Order
-1. Storage files → 2. photo_groups → 3. photos → 4. groups → 5. friendships → 6. public.users → 7. auth.users (RPC: `delete_user_auth()`) → 8. Sign out
+1. Storage files → 2. photo_groups → 3. photos → 4. groups → 5. friend_nicknames → 6. friendships → 7. public.users → 8. auth.users (RPC: `delete_user_auth()`) → 9. Sign out
 
 ### Realtime
 - Supabase Realtime channels for photos, groups, friendships, photo_groups
@@ -222,6 +234,7 @@ Random image from `Frontend/background_image/images.json` via `setRandomAuthBack
 - **groups**: Own groups only
 - **photo_groups**: Own links only
 - **friendships**: SELECT both directions, INSERT as sender, UPDATE as receiver (accept), DELETE as sender or receiver
+- **friend_nicknames**: All ops restricted to own rows (`user_id = auth.uid()`)
 
 ### Storage (photos bucket)
 - Public bucket (SELECT needs no policy)
@@ -283,6 +296,9 @@ Enable Realtime replication for: `photos`, `friendships`, `groups`, `photo_group
 
 ### 6. Friend Request Migration
 Run `supabase_friend_request_migration.sql` (adds `status` column, updates RLS, creates dupe trigger, migrates existing rows to 'accepted')
+
+### 7. Friend Nicknames Migration
+Run `supabase_friend_nicknames_migration.sql` (creates `friend_nicknames` table with RLS policies and indexes)
 
 ---
 

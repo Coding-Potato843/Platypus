@@ -832,6 +832,26 @@
         </div>
     </div>
 
+    <!-- Nickname Edit Modal -->
+    <div class="modal" id="nicknameModal">
+        <div class="modal-overlay" data-close-modal></div>
+        <div class="modal-content nickname-modal-content">
+            <div class="nickname-modal-icon">
+                <i class="ph ph-pencil-simple"></i>
+            </div>
+            <h3 id="nicknameModalTitle">별명 설정</h3>
+            <div class="nickname-input-wrapper">
+                <input type="text" id="nicknameInput" placeholder="별명을 입력하세요" maxlength="20" autocomplete="off">
+                <span class="nickname-char-count"><span id="nicknameCharCount">0</span>/20</span>
+            </div>
+            <p class="nickname-hint">빈 칸으로 두면 별명이 삭제됩니다</p>
+            <div class="confirm-actions">
+                <button class="btn btn-secondary" data-close-modal>취소</button>
+                <button class="btn btn-primary" id="nicknameSaveBtn">저장</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification -->
     <div class="toast-container" id="toastContainer">
         <!-- Toasts will be added here dynamically -->
