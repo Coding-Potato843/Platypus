@@ -571,7 +571,7 @@ export async function getFriendsPhotos(userId, params = {}) {
         .from('friendships')
         .select(`
             friend_id,
-            users!friendships_friend_id_fkey (username, lock_photo_downloads)
+            users!friendships_friend_id_fkey (username, avatar_url, lock_photo_downloads, hide_location)
         `)
         .eq('user_id', userId)
         .eq('status', 'accepted');
@@ -580,7 +580,7 @@ export async function getFriendsPhotos(userId, params = {}) {
         .from('friendships')
         .select(`
             user_id,
-            users!friendships_user_id_fkey (username, lock_photo_downloads)
+            users!friendships_user_id_fkey (username, avatar_url, lock_photo_downloads, hide_location)
         `)
         .eq('friend_id', userId)
         .eq('status', 'accepted');
@@ -588,20 +588,26 @@ export async function getFriendsPhotos(userId, params = {}) {
     if (e1) throw new ApiError(500, e1.message);
     if (e2) throw new ApiError(500, e2.message);
 
-    // Build friendId → username map and download lock map
+    // Build friendId → info maps
     const friendNameMap = {};
+    const friendAvatarMap = {};
     const friendDownloadLockMap = {};
+    const friendHideLocationMap = {};
     const friendIds = [];
 
     (sent || []).forEach(f => {
         friendIds.push(f.friend_id);
         friendNameMap[f.friend_id] = f.users?.username || 'Unknown';
+        friendAvatarMap[f.friend_id] = f.users?.avatar_url || null;
         friendDownloadLockMap[f.friend_id] = !!f.users?.lock_photo_downloads;
+        friendHideLocationMap[f.friend_id] = !!f.users?.hide_location;
     });
     (received || []).forEach(f => {
         friendIds.push(f.user_id);
         friendNameMap[f.user_id] = f.users?.username || 'Unknown';
+        friendAvatarMap[f.user_id] = f.users?.avatar_url || null;
         friendDownloadLockMap[f.user_id] = !!f.users?.lock_photo_downloads;
+        friendHideLocationMap[f.user_id] = !!f.users?.hide_location;
     });
 
     const uniqueFriendIds = [...new Set(friendIds)];
@@ -638,8 +644,11 @@ export async function getFriendsPhotos(userId, params = {}) {
         created_at: photo.created_at,
         location: photo.location || '알 수 없음',
         groupIds: [],
+        authorId: photo.user_id,
         author: friendNameMap[photo.user_id] || 'Unknown',
+        authorAvatar: friendAvatarMap[photo.user_id] || null,
         downloadLocked: friendDownloadLockMap[photo.user_id] || false,
+        locationHidden: friendHideLocationMap[photo.user_id] || false,
     }));
 }
 

@@ -494,9 +494,11 @@ const elements = {
     photoDate: document.getElementById('photoDate'),
     photoUploadDate: document.getElementById('photoUploadDate'),
     photoLocation: document.getElementById('photoLocation'),
+    photoLocationItem: document.getElementById('photoLocationItem'),
     photoAuthorItem: document.getElementById('photoAuthorItem'),
     photoAuthor: document.getElementById('photoAuthor'),
     groupToggleList: document.getElementById('groupToggleList'),
+    photoGroupsSection: document.getElementById('photoGroupsSection'),
     deletePhotoBtn: document.getElementById('deletePhotoBtn'),
     downloadPhotoBtn: document.getElementById('downloadPhotoBtn'),
 
@@ -569,6 +571,7 @@ const elements = {
     addFriendBtn: document.getElementById('addFriendBtn'),
     sendFriendRequestBtn: document.getElementById('sendFriendRequestBtn'),
     friendSubTabActionBar: document.getElementById('friendSubTabActionBar'),
+    friendSubTabSearchInput: document.getElementById('friendSubTabSearchInput'),
     friendListModal: document.getElementById('friendListModal'),
     friendListModalTitle: document.getElementById('friendListModalTitle'),
     friendListModalIcon: document.getElementById('friendListModalIcon'),
@@ -577,6 +580,7 @@ const elements = {
     deleteAccountBtn: document.getElementById('deleteAccountBtn'),
     blockFriendRequestsToggle: document.getElementById('blockFriendRequestsToggle'),
     lockPhotoDownloadsToggle: document.getElementById('lockPhotoDownloadsToggle'),
+    hideLocationToggle: document.getElementById('hideLocationToggle'),
 
     // Other
     loadingOverlay: document.getElementById('loadingOverlay'),
@@ -960,6 +964,21 @@ async function handleLockPhotoDownloadsToggle(e) {
     }
 }
 
+async function handleHideLocationToggle(e) {
+    const user = getCurrentUser();
+    if (!user) return;
+
+    const checked = e.target.checked;
+    try {
+        await updateUserProfile(user.id, { hide_location: checked });
+        showToast(checked ? '위치 정보 숨기기가 활성화되었습니다' : '위치 정보 숨기기가 비활성화되었습니다', 'success');
+    } catch (error) {
+        console.error('Failed to update hide location setting:', error);
+        e.target.checked = !checked;
+        showToast('설정 변경에 실패했습니다', 'error');
+    }
+}
+
 /**
  * Update UI for authenticated user
  * @param {boolean} showLoadingOverlay - Whether to show loading overlay during data load (default: true)
@@ -989,6 +1008,7 @@ async function updateUIForAuthenticatedUser(showLoadingOverlay = true) {
         // Set toggles
         elements.blockFriendRequestsToggle.checked = !!profile.block_friend_requests;
         elements.lockPhotoDownloadsToggle.checked = !!profile.lock_photo_downloads;
+        elements.hideLocationToggle.checked = !!profile.hide_location;
     } else {
         // Fallback to auth user data
         elements.userName.textContent = user.user_metadata?.display_name || user.email;
@@ -999,6 +1019,7 @@ async function updateUIForAuthenticatedUser(showLoadingOverlay = true) {
         state.lastSyncDate = null;
         elements.blockFriendRequestsToggle.checked = false;
         elements.lockPhotoDownloadsToggle.checked = true;
+        elements.hideLocationToggle.checked = true;
     }
 
     // Load user stats from Supabase
@@ -1042,6 +1063,7 @@ function updateUIForUnauthenticatedUser() {
     // Reset toggles
     elements.blockFriendRequestsToggle.checked = false;
     elements.lockPhotoDownloadsToggle.checked = false;
+    elements.hideLocationToggle.checked = false;
 
     // Reset sync state
     state.lastSyncDate = null;
@@ -1224,7 +1246,7 @@ function renderGallery(galleryElement, photos, showLoadMore = false, hasMore = f
             </div>
             <div class="gallery-badges">
                 ${photo.groupIds.length > 0 ? '<span class="badge badge-group"><i class="ph-fill ph-folder"></i></span>' : ''}
-                ${photo.author ? '<span class="badge badge-author"><i class="ph-fill ph-user"></i></span>' : ''}
+                ${photo.author ? `<span class="badge badge-author">${photo.authorAvatar ? `<img src="${photo.authorAvatar}" alt="${photo.author}">` : '<i class="ph-fill ph-user"></i>'}</span>` : ''}
             </div>
         </div>
     `).join('');
@@ -1544,12 +1566,20 @@ function openPhotoModal(photoId) {
     elements.modalPhoto.src = photo.url;
     elements.photoDate.textContent = `날짜: ${formatDate(photo.date)}`;
     elements.photoUploadDate.textContent = `업로드: ${formatDate(photo.created_at)}`;
-    elements.photoLocation.textContent = `위치: ${photo.location}`;
+    // Show/hide location based on owner's hide_location setting
+    if (photo.locationHidden) {
+        elements.photoLocationItem.style.display = 'none';
+    } else {
+        elements.photoLocationItem.style.display = 'flex';
+        elements.photoLocation.textContent = `위치: ${photo.location}`;
+    }
 
     // Show/hide author
     if (photo.author) {
         elements.photoAuthorItem.style.display = 'flex';
-        elements.photoAuthor.textContent = `작성자: ${photo.author}`;
+        const nickname = photo.authorId ? state.friendNicknames[photo.authorId] : null;
+        const nicknameHtml = nickname ? ` <span class="photo-author-nickname">(${nickname})</span>` : '';
+        elements.photoAuthor.innerHTML = `업로더: ${photo.author}${nicknameHtml}`;
     } else {
         elements.photoAuthorItem.style.display = 'none';
     }
@@ -1573,8 +1603,13 @@ function openPhotoModal(photoId) {
         elements.downloadPhotoBtn.removeAttribute('data-tooltip');
     }
 
-    // Render group toggles
-    renderGroupToggles(photo);
+    // Show/hide group section (own photos only)
+    if (isFriendPhoto) {
+        elements.photoGroupsSection.style.display = 'none';
+    } else {
+        elements.photoGroupsSection.style.display = '';
+        renderGroupToggles(photo);
+    }
 
     openModal(elements.photoModal);
 }
@@ -2399,7 +2434,32 @@ function attachSentRequestHandlers(container) {
     });
 }
 
+function getSubTabSearchTerm() {
+    return (elements.friendSubTabSearchInput?.value || '').trim().toLowerCase();
+}
+
+function filterFriends(friends, term) {
+    if (!term) return friends;
+    return friends.filter(f => {
+        const nickname = state.friendNicknames[f.id] || '';
+        return f.name.toLowerCase().includes(term)
+            || f.username.toLowerCase().includes(term)
+            || nickname.toLowerCase().includes(term);
+    });
+}
+
+function filterRequests(requests, term) {
+    if (!term) return requests;
+    return requests.filter(r =>
+        r.name.toLowerCase().includes(term)
+        || r.username.toLowerCase().includes(term)
+    );
+}
+
 function renderFriendsList() {
+    const searchTerm = getSubTabSearchTerm();
+    const filtered = filterFriends(state.friends, searchTerm);
+
     if (state.friends.length === 0) {
         elements.friendsList.innerHTML = `
             <div class="gallery-empty">
@@ -2410,14 +2470,23 @@ function renderFriendsList() {
         return;
     }
 
-    const displayFriends = state.friends.slice(0, MAX_INLINE_ITEMS);
+    if (filtered.length === 0) {
+        elements.friendsList.innerHTML = `
+            <div class="gallery-empty" style="padding: 1.5rem 0;">
+                <p>검색 결과가 없습니다</p>
+            </div>
+        `;
+        return;
+    }
+
+    const displayFriends = searchTerm ? filtered : filtered.slice(0, MAX_INLINE_ITEMS);
     elements.friendsList.innerHTML = displayFriends.map(renderFriendItemHtml).join('');
 
-    if (state.friends.length > MAX_INLINE_ITEMS) {
+    if (!searchTerm && filtered.length > MAX_INLINE_ITEMS) {
         elements.friendsList.innerHTML += `
             <button class="btn btn-secondary btn-full btn-show-more" data-list-type="friends">
                 <i class="ph ph-dots-three"></i>
-                <span>더보기 (${state.friends.length}명)</span>
+                <span>더보기 (${filtered.length}명)</span>
             </button>
         `;
         elements.friendsList.querySelector('.btn-show-more').addEventListener('click', () => openFriendListModal('friends'));
@@ -2509,6 +2578,8 @@ function renderSentRequestItemHtml(req) {
 function renderReceivedRequests() {
     const list = elements.receivedRequestsList;
     const requests = state.pendingRequests.received;
+    const searchTerm = getSubTabSearchTerm();
+    const filtered = filterRequests(requests, searchTerm);
 
     if (requests.length === 0) {
         list.innerHTML = `
@@ -2519,14 +2590,23 @@ function renderReceivedRequests() {
         return;
     }
 
-    const displayRequests = requests.slice(0, MAX_INLINE_ITEMS);
+    if (filtered.length === 0) {
+        list.innerHTML = `
+            <div class="gallery-empty" style="padding: 1.5rem 0;">
+                <p>검색 결과가 없습니다</p>
+            </div>
+        `;
+        return;
+    }
+
+    const displayRequests = searchTerm ? filtered : filtered.slice(0, MAX_INLINE_ITEMS);
     list.innerHTML = displayRequests.map(renderReceivedRequestItemHtml).join('');
 
-    if (requests.length > MAX_INLINE_ITEMS) {
+    if (!searchTerm && filtered.length > MAX_INLINE_ITEMS) {
         list.innerHTML += `
             <button class="btn btn-secondary btn-full btn-show-more" data-list-type="received">
                 <i class="ph ph-dots-three"></i>
-                <span>더보기 (${requests.length}건)</span>
+                <span>더보기 (${filtered.length}건)</span>
             </button>
         `;
         list.querySelector('.btn-show-more').addEventListener('click', () => openFriendListModal('received'));
@@ -2538,6 +2618,8 @@ function renderReceivedRequests() {
 function renderSentRequests() {
     const list = elements.sentRequestsList;
     const requests = state.pendingRequests.sent;
+    const searchTerm = getSubTabSearchTerm();
+    const filtered = filterRequests(requests, searchTerm);
 
     if (requests.length === 0) {
         list.innerHTML = `
@@ -2548,14 +2630,23 @@ function renderSentRequests() {
         return;
     }
 
-    const displayRequests = requests.slice(0, MAX_INLINE_ITEMS);
+    if (filtered.length === 0) {
+        list.innerHTML = `
+            <div class="gallery-empty" style="padding: 1.5rem 0;">
+                <p>검색 결과가 없습니다</p>
+            </div>
+        `;
+        return;
+    }
+
+    const displayRequests = searchTerm ? filtered : filtered.slice(0, MAX_INLINE_ITEMS);
     list.innerHTML = displayRequests.map(renderSentRequestItemHtml).join('');
 
-    if (requests.length > MAX_INLINE_ITEMS) {
+    if (!searchTerm && filtered.length > MAX_INLINE_ITEMS) {
         list.innerHTML += `
             <button class="btn btn-secondary btn-full btn-show-more" data-list-type="sent">
                 <i class="ph ph-dots-three"></i>
-                <span>더보기 (${requests.length}건)</span>
+                <span>더보기 (${filtered.length}건)</span>
             </button>
         `;
         list.querySelector('.btn-show-more').addEventListener('click', () => openFriendListModal('sent'));
@@ -3256,9 +3347,10 @@ function setupEventListeners() {
 
     elements.editProfileBtn.addEventListener('click', openProfileEditModal);
 
-    // Block friend requests toggle
+    // Account settings toggles
     elements.blockFriendRequestsToggle.addEventListener('change', handleBlockFriendRequestsToggle);
     elements.lockPhotoDownloadsToggle.addEventListener('change', handleLockPhotoDownloadsToggle);
+    elements.hideLocationToggle.addEventListener('change', handleHideLocationToggle);
 
     // Profile Edit Modal
     elements.profileEditForm.addEventListener('submit', handleProfileEdit);
@@ -3283,6 +3375,20 @@ function setupEventListeners() {
         buttonSelector: '.friend-sub-tab-btn',
         contentSelector: '.friend-sub-tab-content',
         defaultTab: 'friend-list',
+        onTabChange: () => {
+            // Clear search when switching tabs
+            elements.friendSubTabSearchInput.value = '';
+            renderFriendsList();
+            renderReceivedRequests();
+            renderSentRequests();
+        },
+    });
+
+    // Friend sub-tab search (real-time filtering)
+    elements.friendSubTabSearchInput.addEventListener('input', () => {
+        renderFriendsList();
+        renderReceivedRequests();
+        renderSentRequests();
     });
 
     // Keyboard shortcuts

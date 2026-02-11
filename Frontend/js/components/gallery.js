@@ -104,7 +104,7 @@ export class Gallery {
                 </div>
                 <div class="gallery-badges">
                     ${hasGroups ? '<span class="badge badge-group"><i class="ph-fill ph-folder"></i></span>' : ''}
-                    ${hasAuthor ? '<span class="badge badge-author"><i class="ph-fill ph-user"></i></span>' : ''}
+                    ${hasAuthor ? `<span class="badge badge-author">${photo.authorAvatar ? `<img src="${photo.authorAvatar}" alt="${photo.author}">` : `<i class="ph-fill ph-user"></i>`}</span>` : ''}
                 </div>
             </div>
         `;

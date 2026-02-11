@@ -356,6 +356,17 @@
                                 <span class="toggle-slider"></span>
                             </label>
                         </div>
+                        <div class="setting-divider"></div>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <span class="setting-label">위치 정보 숨기기</span>
+                                <span class="setting-description">활성화하면 친구가 내 사진의 위치 정보를 볼 수 없습니다. 내 사진 탭에서는 정상적으로 표시됩니다.</span>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="hideLocationToggle">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
                     </div>
 
                     <!-- Friend Sub-Tabs -->
@@ -374,6 +385,11 @@
                                     <span class="friend-sub-tab-badge" id="sentRequestCount" style="display: none;"></span>
                                 </button>
                             </nav>
+                        </div>
+
+                        <div class="friend-sub-tab-search">
+                            <i class="ph ph-magnifying-glass"></i>
+                            <input type="text" id="friendSubTabSearchInput" placeholder="이름, ID로 검색">
                         </div>
 
                         <div class="friend-sub-tab-content-area">
@@ -445,7 +461,7 @@
                             <i class="ph ph-upload-simple"></i>
                             <span id="photoUploadDate">업로드: ---</span>
                         </div>
-                        <div class="meta-item">
+                        <div class="meta-item" id="photoLocationItem">
                             <i class="ph ph-map-pin"></i>
                             <span id="photoLocation">위치: ---</span>
                         </div>
@@ -455,7 +471,7 @@
                         </div>
                     </div>
 
-                    <div class="photo-groups-section">
+                    <div class="photo-groups-section" id="photoGroupsSection">
                         <h4>
                             <i class="ph ph-folder"></i>
                             그룹 지정

@@ -55,6 +55,7 @@ Project_02_Platypus/
 ├── supabase_rls_setup.sql            # RLS policies for all tables
 ├── supabase_friend_request_migration.sql  # Friend request system migration
 ├── supabase_friend_nicknames_migration.sql  # Friend nicknames migration
+├── supabase_block_friend_requests_migration.sql  # Privacy settings migration
 └── CLAUDE.md
 ```
 
@@ -65,7 +66,7 @@ Project_02_Platypus/
 > **Two user tables**: `auth.users` (Supabase Auth - email/password/login) and `public.users` (app profile data). App features reference `public.users.id` via foreign keys.
 
 ### users
-`id` (uuid PK, = auth.users.id), `email` (text UNIQUE), `username` (text, display name), `user_id` (text UNIQUE, handle like @_a3x9), `avatar_url` (text), `created_at` (timestamp), `last_sync_at` (timestamp, last mobile scan date)
+`id` (uuid PK, = auth.users.id), `email` (text UNIQUE), `username` (text, display name), `user_id` (text UNIQUE, handle like @_a3x9), `avatar_url` (text), `created_at` (timestamp), `last_sync_at` (timestamp, last mobile scan date), `block_friend_requests` (boolean DEFAULT false), `lock_photo_downloads` (boolean DEFAULT true), `hide_location` (boolean DEFAULT true)
 
 ### photos
 `id` (uuid PK), `user_id` (uuid FK→users), `url` (text), `date_taken` (timestamp), `location` (text), `file_hash` (text, SHA-256 for dedup), `created_at` (timestamp, upload date)
@@ -116,8 +117,8 @@ getGroups(userId), createGroup(userId, name), updateGroup(groupId, userId, name)
 
 // Friends (Bidirectional Request System)
 getFriends(userId)              // Accepted friendships, both directions
-getFriendsPhotos(userId, params)  // Author names resolved via friendships FK join (not photos FK)
-sendFriendRequest(userId, friendId)       // Creates pending friendship
+getFriendsPhotos(userId, params)  // Author names + avatar + privacy settings via friendships FK join
+sendFriendRequest(userId, friendId)       // Creates pending friendship; checks target's block_friend_requests
 acceptFriendRequest(userId, friendshipId) // Receiver accepts → status='accepted'
 rejectFriendRequest(userId, friendshipId) // Receiver rejects → row deleted
 cancelFriendRequest(userId, friendshipId) // Sender cancels → row deleted
@@ -177,7 +178,8 @@ getFileDate(file)
 - **Flow**: Send request → receiver accepts/rejects → mutual friendship
 - `user_id` = requester, `friend_id` = receiver
 - Add friend modal shows 4 states: 추가/요청됨/수락/친구
-- Account tab layout: Profile Card → Logout/Delete → Friends List → Received Requests → Sent Requests
+- Account tab layout: Profile Card → Privacy Settings (toggles) → Friend Sub-tabs (with search) → Account Actions
+- Privacy settings: block_friend_requests (default off), lock_photo_downloads (default on), hide_location (default on)
 - Request sections always visible (show empty state message when none)
 - Badge notification on Account tab for pending received requests
 - Realtime needs two `.on()` listeners per channel (Supabase doesn't support OR filters)
@@ -203,7 +205,7 @@ getFileDate(file)
 - Use `.maybeSingle()` instead of `.single()` when row might not exist (avoids PGRST116)
 - FK joins: `users!friendships_friend_id_fkey` (friend_id direction), `users!friendships_user_id_fkey` (user_id direction)
 - Bidirectional queries need two separate queries merged client-side
-- `getFriendsPhotos()` resolves author names from friendships FK joins, NOT photos FK join
+- `getFriendsPhotos()` resolves author names, avatars, and privacy settings (lock_photo_downloads, hide_location) from friendships FK joins
 - `loadPhotos()` and `loadFriendPhotos()` use separate loading flags (`isLoadingMoreMyPhotos` / `isLoadingMoreFriendPhotos`) to avoid race conditions in `Promise.all`
 - Groups use UUID as id (not string)
 
@@ -219,7 +221,7 @@ getFileDate(file)
 - Slideshow: Play/Pause, Prev/Next, Arrow/Space/Escape keys, 3s auto-advance, auto-hide controls
 
 ### Components
-Toast (`showToast(message, type)`), Loading overlay, Confirm modal (`openModal(elements.confirmModal)`), Photo detail modal (taken date, upload date, location, group assignment), Import modal, Group modal, Profile modal, Add Friend modal
+Toast (`showToast(message, type)`), Loading overlay, Confirm modal (`openModal(elements.confirmModal)`), Photo detail modal (taken date, upload date, location, group assignment — groups/delete hidden for friend photos, download disabled if locked, location hidden if owner set hide_location), Import modal, Group modal, Profile modal, Add Friend modal, Custom tooltip (`[data-tooltip]` attribute, dark theme styled)
 
 ### Auth Page Background
 Random image from `Frontend/background_image/images.json` via `setRandomAuthBackground()`. CSS: `.auth-page` with `background-size: cover` and dark overlay (70% opacity `::before`).
@@ -300,6 +302,9 @@ Run `supabase_friend_request_migration.sql` (adds `status` column, updates RLS, 
 ### 7. Friend Nicknames Migration
 Run `supabase_friend_nicknames_migration.sql` (creates `friend_nicknames` table with RLS policies and indexes)
 
+### 8. Privacy Settings Migration
+Run `supabase_block_friend_requests_migration.sql` (adds `block_friend_requests`, `lock_photo_downloads`, `hide_location` columns to users table + schema cache reload)
+
 ---
 
 ## UI Terminology (Korean)
@@ -315,6 +320,10 @@ Run `supabase_friend_nicknames_migration.sql` (creates `friend_nicknames` table 
 | Send Friend Request | 친구 요청 보내기 | Button in sent requests header |
 | No Received Requests | 받은 친구 요청이 없습니다 | Empty state |
 | No Sent Requests | 보낸 친구 요청이 없습니다 | Empty state |
+| Block Friend Requests | 친구 요청 거부 | Account settings toggle |
+| Download Lock | 다운로드 잠금 | Account settings toggle (default ON) |
+| Hide Location | 위치 정보 숨기기 | Account settings toggle (default ON) |
+| Uploader | 업로더 | Friend photo detail modal (was "작성자") |
 | Gallery Scan | 갤러리 스캔 | Mobile: auto-scan tab |
 | Select from Gallery | 갤러리에서 선택 | Mobile: manual picker tab |
 
@@ -348,3 +357,9 @@ eas build --profile development --platform android
 - All user-facing strings are in Korean
 - State management: plain `state` object, DOM elements in `elements` object
 - Date format: `formatDate()` → "YYYY년 M월 D일", `formatDateTime()` → "YYYY-MM-DD HH:mm"
+- Friend photo objects include: `authorId`, `author`, `authorAvatar`, `downloadLocked`, `locationHidden`
+- Friend sub-tab search bar: real-time filtering by name/ID (+ nickname for friends list), clears on tab switch
+- Friend photo detail modal: no delete button, no group section; download button disabled with tooltip if locked; location hidden if owner set hide_location
+- Gallery author badge shows friend's profile avatar (falls back to person icon if no avatar)
+- Toggle switch component: `.toggle-switch` with `.toggle-slider`, reusable across settings
+- Custom tooltip: `[data-tooltip]` attribute, dark theme with white text and arrow
