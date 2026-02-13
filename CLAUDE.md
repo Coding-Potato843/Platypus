@@ -56,6 +56,7 @@ Project_02_Platypus/
 ├── supabase_friend_request_migration.sql  # Friend request system migration
 ├── supabase_friend_nicknames_migration.sql  # Friend nicknames migration
 ├── supabase_block_friend_requests_migration.sql  # Privacy settings migration
+├── supabase_realtime_setup.sql       # Realtime publication setup
 └── CLAUDE.md
 ```
 
@@ -137,9 +138,10 @@ getUserProfile(userId), updateUserProfile(userId, updates), updateLastSync(userI
 deleteUserAccount(userId)  // Cascade-deletes all user data + auth.users via RPC
 
 // Realtime
-subscribeToRealtimeChanges(userId, callbacks)  // photos, groups, friendships
-subscribeToFriendPhotos(friendIds, callback)
+subscribeToRealtimeChanges(userId, callbacks)  // photos, groups, friendships, photo_groups
+subscribeToFriendPhotos(friendIds, callbacks)  // friend photos (all events) + friend user settings (UPDATE)
 unsubscribeFromRealtime()
+diagnoseRealtime()                             // Console diagnostic tool for Realtime connection status
 ```
 
 ### auth.js
@@ -188,9 +190,16 @@ getFileDate(file)
 1. Storage files → 2. photo_groups → 3. photos → 4. groups → 5. friend_nicknames → 6. friendships → 7. public.users → 8. auth.users (RPC: `delete_user_auth()`) → 9. Sign out
 
 ### Realtime
-- Supabase Realtime channels for photos, groups, friendships, photo_groups
+- Supabase JS pinned to `@2.95.3` via CDN (prevents silent breaking changes)
+- Two channels: `db-changes` (own data) and `friend-data-changes` (friend photos + settings)
+- `db-changes` channel: photos, groups, friendships (bidirectional), photo_groups
+- `friend-data-changes` channel: friend photos (INSERT/UPDATE/DELETE) + friend `users` table UPDATE (privacy settings like `lock_photo_downloads`, `hide_location`)
 - Friendships need two listeners: `user_id=eq.X` AND `friend_id=eq.X` (no OR filter support)
-- `setupRealtimeSubscriptions()` called after login, `cleanupRealtimeSubscriptions()` on logout
+- `setupRealtimeSubscriptions()` (async) called after login: sets `supabase.realtime.setAuth(token)` before subscribing
+- `TOKEN_REFRESHED` auth event keeps Realtime WebSocket token in sync
+- `cleanupRealtimeSubscriptions()` on logout; uses `removeAllChannels()` for thorough cleanup
+- `diagnoseRealtime()` exported for browser console debugging
+- Auth initialization guard prevents double `setupRealtimeSubscriptions()` call on page load
 
 ### Duplicate Detection
 - SHA-256 hash stored in `file_hash` column
@@ -294,7 +303,9 @@ GRANT EXECUTE ON FUNCTION public.delete_user_auth() TO authenticated;
 ```
 
 ### 5. Realtime
-Enable Realtime replication for: `photos`, `friendships`, `groups`, `photo_groups` (Dashboard → Database → Replication)
+Run `supabase_realtime_setup.sql` in SQL Editor to add all tables to the `supabase_realtime` publication.
+Also enable Realtime toggle for each table in Dashboard → Table Editor → table settings.
+Required tables: `photos`, `friendships`, `groups`, `photo_groups`, `users`
 
 ### 6. Friend Request Migration
 Run `supabase_friend_request_migration.sql` (adds `status` column, updates RLS, creates dupe trigger, migrates existing rows to 'accepted')

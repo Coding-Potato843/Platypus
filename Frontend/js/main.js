@@ -304,10 +304,29 @@ async function loadAllUserData(showLoadingOverlay = true) {
  * Setup realtime subscriptions for database changes
  * Called after user authentication
  */
-function setupRealtimeSubscriptions() {
+async function setupRealtimeSubscriptions() {
     const user = getCurrentUser();
     if (!user) {
         console.warn('Cannot setup realtime: no user logged in');
+        return;
+    }
+
+    // 1. Clean up all existing channels (including errored ones)
+    cleanupRealtimeSubscriptions();
+    supabase.realtime.removeAllChannels();
+
+    // 2. Set auth token for Realtime WebSocket connection
+    try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+            supabase.realtime.setAuth(session.access_token);
+            console.log('🔌 Realtime auth token set');
+        } else {
+            console.warn('🔌 No session token available for Realtime');
+            return;
+        }
+    } catch (err) {
+        console.error('🔌 Failed to set Realtime auth:', err);
         return;
     }
 
@@ -379,14 +398,30 @@ function setupFriendPhotosSubscription() {
         return;
     }
 
-    console.log('📸 Subscribing to friend photos for', friendIds.length, 'friends');
+    console.log('📸 Subscribing to friend data for', friendIds.length, 'friends');
 
-    subscribeToFriendPhotos(friendIds, (payload) => {
-        console.log('📸 Realtime: Friend uploaded a photo');
-        debounceReload('friendPhotos', () => {
-            loadFriendPhotos();
-            showToast('친구가 새 사진을 업로드했습니다', 'info');
-        });
+    subscribeToFriendPhotos(friendIds, {
+        // When friend uploads, updates, or deletes a photo
+        onFriendPhotosChange: (payload) => {
+            console.log('📸 Realtime: Friend photo changed', payload.eventType);
+            debounceReload('friendPhotos', () => {
+                loadFriendPhotos();
+                if (payload.eventType === 'INSERT') {
+                    showToast('친구가 새 사진을 업로드했습니다', 'info');
+                } else if (payload.eventType === 'DELETE') {
+                    showToast('친구 갤러리가 업데이트되었습니다', 'info');
+                }
+            });
+        },
+
+        // When friend changes privacy settings (download lock, hide location, etc.)
+        onFriendSettingsChange: (payload) => {
+            console.log('🔒 Realtime: Friend settings changed', payload.new);
+            debounceReload('friendSettings', () => {
+                // Reload friend photos to get updated privacy settings
+                loadFriendPhotos();
+            });
+        }
     });
 }
 
@@ -1077,7 +1112,7 @@ async function updateUIForAuthenticatedUser(showLoadingOverlay = true) {
     await loadAllUserData(showLoadingOverlay);
 
     // Setup realtime subscriptions for live updates
-    setupRealtimeSubscriptions();
+    await setupRealtimeSubscriptions();
 }
 
 function updateUIForUnauthenticatedUser() {
@@ -3571,6 +3606,10 @@ async function init() {
             elements.authPage.style.display = 'none';
             elements.appContainer.style.display = 'block';
             await updateUIForAuthenticatedUser();
+        } else if (event === 'TOKEN_REFRESHED' && session?.access_token) {
+            // Keep Realtime WebSocket auth token in sync
+            supabase.realtime.setAuth(session.access_token);
+            console.log('🔌 Realtime auth token refreshed');
         } else if (event === 'SIGNED_OUT') {
             updateUIForUnauthenticatedUser();
         }
@@ -3581,10 +3620,12 @@ async function init() {
     const hasSession = await initAuth();
 
     if (hasSession) {
-        // User is logged in - show app
-        elements.authPage.style.display = 'none';
-        elements.appContainer.style.display = 'block';
-        await updateUIForAuthenticatedUser(false); // Don't show loading overlay (already showing)
+        // Skip if already initialized by SIGNED_IN callback above
+        if (elements.appContainer.style.display !== 'block') {
+            elements.authPage.style.display = 'none';
+            elements.appContainer.style.display = 'block';
+            await updateUIForAuthenticatedUser(false);
+        }
         hideLoading();
         showToast('Platypus에 오신 것을 환영합니다!', 'success');
     } else {

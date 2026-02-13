@@ -3,7 +3,7 @@
  * Handles all API communication with the backend
  */
 
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.95.3/+esm';
 
 // ============================================
 // Supabase Configuration
@@ -1266,7 +1266,7 @@ let realtimeChannel = null;
 export function subscribeToRealtimeChanges(userId, callbacks = {}) {
     // Unsubscribe from existing channel if any
     if (realtimeChannel) {
-        supabase.removeChannel(realtimeChannel);
+        try { supabase.removeChannel(realtimeChannel); } catch (e) { /* already removed */ }
         realtimeChannel = null;
     }
 
@@ -1354,9 +1354,27 @@ export function subscribeToRealtimeChanges(userId, callbacks = {}) {
         );
     }
 
-    // Subscribe to the channel
-    channel.subscribe((status) => {
+    // Subscribe to the channel with error handling and retry
+    channel.subscribe(async (status, err) => {
         console.log('🔌 Realtime subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+            console.log('🔌 Realtime connected successfully');
+        }
+        if (err) {
+            console.error('🔌 Realtime subscription error:', err);
+        }
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.warn('🔌 Realtime connection failed, refreshing auth and retrying...');
+            // Refresh auth token and retry
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.access_token) {
+                    supabase.realtime.setAuth(session.access_token);
+                }
+            } catch (e) {
+                console.error('🔌 Failed to refresh auth for retry:', e);
+            }
+        }
     });
 
     realtimeChannel = channel;
@@ -1364,18 +1382,19 @@ export function subscribeToRealtimeChanges(userId, callbacks = {}) {
 }
 
 /**
- * Subscribe to friends' photos changes
- * This requires a separate subscription since we need to watch multiple user_ids
+ * Subscribe to friends' data changes (photos + user settings)
  * @param {Array<string>} friendIds - Array of friend user IDs
- * @param {Function} onFriendPhotosChange - Callback when friend uploads a photo
+ * @param {Object} callbacks - Callback functions
+ * @param {Function} callbacks.onFriendPhotosChange - Called when friend photos change (INSERT/UPDATE/DELETE)
+ * @param {Function} callbacks.onFriendSettingsChange - Called when friend user settings change (lock_photo_downloads, hide_location, etc.)
  * @returns {Object} - Subscription channel
  */
 let friendPhotosChannel = null;
 
-export function subscribeToFriendPhotos(friendIds, onFriendPhotosChange) {
+export function subscribeToFriendPhotos(friendIds, callbacks = {}) {
     // Unsubscribe from existing channel if any
     if (friendPhotosChannel) {
-        supabase.removeChannel(friendPhotosChannel);
+        try { supabase.removeChannel(friendPhotosChannel); } catch (e) { /* already removed */ }
         friendPhotosChannel = null;
     }
 
@@ -1383,28 +1402,66 @@ export function subscribeToFriendPhotos(friendIds, onFriendPhotosChange) {
         return null;
     }
 
-    const channel = supabase.channel('friend-photos-changes');
+    // Support legacy single-function argument
+    if (typeof callbacks === 'function') {
+        callbacks = { onFriendPhotosChange: callbacks };
+    }
 
-    // Subscribe to each friend's photos
-    // Note: Supabase realtime filter supports `in` operator
-    channel.on(
-        'postgres_changes',
-        {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'photos',
-            filter: `user_id=in.(${friendIds.join(',')})`
-        },
-        (payload) => {
-            console.log('📸 Friend photo added:', payload);
-            if (onFriendPhotosChange) {
-                onFriendPhotosChange(payload);
+    const channel = supabase.channel('friend-data-changes');
+
+    // Subscribe to friends' photos changes (INSERT, UPDATE, DELETE)
+    if (callbacks.onFriendPhotosChange) {
+        channel.on(
+            'postgres_changes',
+            {
+                event: '*',
+                schema: 'public',
+                table: 'photos',
+                filter: `user_id=in.(${friendIds.join(',')})`
+            },
+            (payload) => {
+                console.log('📸 Friend photo change:', payload.eventType);
+                callbacks.onFriendPhotosChange(payload);
+            }
+        );
+    }
+
+    // Subscribe to friends' user profile changes (privacy settings)
+    if (callbacks.onFriendSettingsChange) {
+        channel.on(
+            'postgres_changes',
+            {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'users',
+                filter: `id=in.(${friendIds.join(',')})`
+            },
+            (payload) => {
+                console.log('🔒 Friend settings change:', payload.new);
+                callbacks.onFriendSettingsChange(payload);
+            }
+        );
+    }
+
+    channel.subscribe(async (status, err) => {
+        console.log('🔌 Friend data subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+            console.log('🔌 Friend data channel connected successfully');
+        }
+        if (err) {
+            console.error('🔌 Friend data subscription error:', err);
+        }
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.warn('🔌 Friend data connection failed, refreshing auth...');
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.access_token) {
+                    supabase.realtime.setAuth(session.access_token);
+                }
+            } catch (e) {
+                console.error('🔌 Failed to refresh auth for retry:', e);
             }
         }
-    );
-
-    channel.subscribe((status) => {
-        console.log('🔌 Friend photos subscription status:', status);
     });
 
     friendPhotosChannel = channel;
@@ -1415,16 +1472,81 @@ export function subscribeToFriendPhotos(friendIds, onFriendPhotosChange) {
  * Unsubscribe from all realtime channels
  */
 export function unsubscribeFromRealtime() {
+    try {
+        if (realtimeChannel) {
+            supabase.removeChannel(realtimeChannel);
+        }
+    } catch (e) { /* channel may already be removed */ }
+    realtimeChannel = null;
+
+    try {
+        if (friendPhotosChannel) {
+            supabase.removeChannel(friendPhotosChannel);
+        }
+    } catch (e) { /* channel may already be removed */ }
+    friendPhotosChannel = null;
+
+    console.log('🔌 Unsubscribed from all realtime channels');
+}
+
+/**
+ * Diagnose Realtime connection status
+ * Call from browser console: (await import('./js/services/api.js')).diagnoseRealtime()
+ */
+export async function diagnoseRealtime() {
+    console.group('🔌 Realtime Diagnostics');
+
+    // 1. Auth session check
+    const { data: { session } } = await supabase.auth.getSession();
+    console.log('Auth session:', session ? 'ACTIVE' : 'NONE');
+    if (session) {
+        const exp = new Date(session.expires_at * 1000);
+        console.log('Token expires:', exp.toLocaleString(), exp > new Date() ? '(valid)' : '(EXPIRED)');
+    }
+
+    // 2. Realtime connection state
+    const rt = supabase.realtime;
+    console.log('WebSocket connState:', rt.connState);
+    console.log('Realtime accessToken set:', !!rt.accessToken);
+    console.log('Realtime endpoint:', rt.endPoint);
+
+    // 3. Channel states
+    console.log('Total channels:', rt.channels.length);
+    rt.channels.forEach((ch, i) => {
+        console.log(`  [${i}] topic="${ch.topic}" state="${ch.state}" joinedOnce=${ch.joinedOnce}`);
+    });
+
     if (realtimeChannel) {
-        supabase.removeChannel(realtimeChannel);
-        realtimeChannel = null;
-        console.log('🔌 Unsubscribed from main realtime channel');
+        console.log('Main channel:', realtimeChannel.state);
+    } else {
+        console.warn('Main channel: NOT CREATED');
     }
+
     if (friendPhotosChannel) {
-        supabase.removeChannel(friendPhotosChannel);
-        friendPhotosChannel = null;
-        console.log('🔌 Unsubscribed from friend photos channel');
+        console.log('Friend data channel:', friendPhotosChannel.state);
+    } else {
+        console.warn('Friend data channel: NOT CREATED');
     }
+
+    // 4. Quick connectivity test
+    console.log('--- Quick connectivity test ---');
+    try {
+        const testChannel = supabase.channel('_diag_test');
+        const result = await new Promise((resolve) => {
+            const timeout = setTimeout(() => resolve('TIMED_OUT'), 5000);
+            testChannel.subscribe((status, err) => {
+                clearTimeout(timeout);
+                if (err) resolve('ERROR: ' + err.message);
+                else resolve(status);
+            });
+        });
+        console.log('Test channel result:', result);
+        supabase.removeChannel(testChannel);
+    } catch (e) {
+        console.error('Test channel error:', e);
+    }
+
+    console.groupEnd();
 }
 
 // ============================================
@@ -1483,4 +1605,5 @@ export default {
     subscribeToRealtimeChanges,
     subscribeToFriendPhotos,
     unsubscribeFromRealtime,
+    diagnoseRealtime,
 };
