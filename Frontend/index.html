@@ -146,39 +146,11 @@
                     <h1 class="logo-text">Platypus</h1>
                 </div>
                 <div class="header-actions">
-                    <button class="btn btn-icon" id="searchToggle" aria-label="검색">
-                        <i class="ph ph-magnifying-glass"></i>
-                    </button>
                     <button class="btn btn-primary" id="syncBtn">
                         <i class="ph ph-arrows-clockwise"></i>
                         <span>사진 불러오기</span>
                     </button>
                 </div>
-            </div>
-
-            <!-- Search Bar (Hidden by default) -->
-            <div class="search-bar" id="searchBar">
-                <div class="search-input-group">
-                    <label for="locationSearch">위치</label>
-                    <div class="search-input-wrapper">
-                        <i class="ph ph-magnifying-glass"></i>
-                        <input type="text" id="locationSearch" placeholder="위치로 검색..." class="search-input">
-                    </div>
-                </div>
-                <div class="date-filter">
-                    <div class="date-input-group">
-                        <label for="startDate">시작일</label>
-                        <input type="date" id="startDate" class="date-input">
-                    </div>
-                    <div class="date-input-group">
-                        <label for="endDate">종료일</label>
-                        <input type="date" id="endDate" class="date-input">
-                    </div>
-                </div>
-                <button class="btn btn-secondary btn-clear-filters" id="clearFilters">
-                    <i class="ph ph-x"></i>
-                    <span>필터 초기화</span>
-                </button>
             </div>
         </header>
 
@@ -236,6 +208,31 @@
                     </button>
                 </div>
 
+                <!-- Photo Filters (always visible) -->
+                <div class="photo-filter-bar" id="photoFilterBar">
+                    <div class="search-input-group">
+                        <label for="locationSearch">위치</label>
+                        <div class="search-input-wrapper">
+                            <i class="ph ph-magnifying-glass"></i>
+                            <input type="text" id="locationSearch" placeholder="위치로 검색..." class="search-input">
+                        </div>
+                    </div>
+                    <div class="date-filter">
+                        <div class="date-input-group">
+                            <label for="startDate">촬영 날짜 필터링(시작 날짜)</label>
+                            <input type="date" id="startDate" class="date-input">
+                        </div>
+                        <div class="date-input-group">
+                            <label for="endDate">촬영 날짜 필터링(마지막 날짜)</label>
+                            <input type="date" id="endDate" class="date-input">
+                        </div>
+                    </div>
+                    <button class="btn btn-secondary btn-clear-filters" id="clearFilters">
+                        <i class="ph ph-x"></i>
+                        <span>필터 초기화</span>
+                    </button>
+                </div>
+
                 <!-- Sort Options -->
                 <div class="sort-container">
                     <div class="sort-label">
@@ -272,6 +269,52 @@
                         </button>
                     </div>
                 </div>
+
+                <!-- Friend Photo Filters (always visible) -->
+                <div class="photo-filter-bar" id="friendPhotoFilterBar">
+                    <div class="search-input-group">
+                        <label for="friendLocationSearch">위치</label>
+                        <div class="search-input-wrapper">
+                            <i class="ph ph-magnifying-glass"></i>
+                            <input type="text" id="friendLocationSearch" placeholder="위치로 검색..." class="search-input">
+                        </div>
+                    </div>
+                    <div class="date-filter">
+                        <div class="date-input-group">
+                            <label for="friendStartDate">촬영 날짜 필터링(시작 날짜)</label>
+                            <input type="date" id="friendStartDate" class="date-input">
+                        </div>
+                        <div class="date-input-group">
+                            <label for="friendEndDate">촬영 날짜 필터링(마지막 날짜)</label>
+                            <input type="date" id="friendEndDate" class="date-input">
+                        </div>
+                    </div>
+                    <button class="btn btn-secondary btn-clear-filters" id="friendClearFilters">
+                        <i class="ph ph-x"></i>
+                        <span>필터 초기화</span>
+                    </button>
+                    <button class="btn btn-secondary" id="friendFilterBtn">
+                        <i class="ph ph-funnel"></i>
+                        <span>친구 필터링</span>
+                    </button>
+                </div>
+
+                <!-- Friend Sort Options -->
+                <div class="sort-container">
+                    <div class="sort-label">
+                        <i class="ph ph-sort-ascending"></i>
+                        <span>정렬</span>
+                    </div>
+                    <select id="friendSortFieldSelect" class="sort-select">
+                        <option value="date_taken">촬영 시간</option>
+                        <option value="created_at">업로드 시간</option>
+                    </select>
+                    <select id="friendSortOrderSelect" class="sort-select">
+                        <option value="desc">최신순</option>
+                        <option value="asc">오래된순</option>
+                    </select>
+                </div>
+
                 <div class="gallery" id="friendsGallery">
                     <!-- Friend photos will be dynamically rendered here -->
                 </div>
@@ -904,21 +947,31 @@
         </div>
     </div>
 
-    <!-- Friend List Modal (Show More) -->
-    <div class="modal" id="friendListModal">
+    <!-- Friend Filter Modal (Toggle friends to show/hide photos) -->
+    <div class="modal" id="friendFilterModal">
         <div class="modal-overlay" data-close-modal></div>
-        <div class="modal-content friend-list-modal-content">
+        <div class="modal-content friend-filter-modal-content">
             <div class="modal-header">
                 <h2>
-                    <i class="ph ph-users" id="friendListModalIcon"></i>
-                    <span id="friendListModalTitle">친구 목록</span>
+                    <i class="ph ph-funnel"></i>
+                    친구 필터링
                 </h2>
                 <button class="modal-close" data-close-modal aria-label="닫기">
                     <i class="ph ph-x"></i>
                 </button>
             </div>
-            <div class="friend-list-modal-body" id="friendListModalBody">
-                <!-- Items will be dynamically rendered here -->
+            <div class="friend-filter-body">
+                <div class="friend-filter-search">
+                    <i class="ph ph-magnifying-glass"></i>
+                    <input type="text" id="friendFilterSearchInput" placeholder="이름, ID, 별명으로 검색">
+                </div>
+                <div class="friend-filter-actions">
+                    <button class="btn btn-link" id="friendFilterSelectAll">전체 선택</button>
+                    <button class="btn btn-link" id="friendFilterDeselectAll">전체 해제</button>
+                </div>
+                <div class="friend-filter-list" id="friendFilterList">
+                    <!-- Friend toggle items will be dynamically rendered here -->
+                </div>
             </div>
         </div>
     </div>

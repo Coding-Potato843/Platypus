@@ -183,6 +183,8 @@ async function loadFriendPhotos(loadMore = false) {
         const photos = await getFriendsPhotos(user.id, {
             limit: state.pagination.photosPerPage,
             offset: state.pagination.friendPhotosOffset,
+            sortField: state.friendSort.field,
+            sortOrder: state.friendSort.order,
         });
 
         if (photos.length < state.pagination.photosPerPage) {
@@ -215,6 +217,21 @@ async function loadFriends() {
     try {
         const friends = await getFriends(user.id);
         state.friends = friends;
+
+        // Initialize filter toggles for new friends (default ON)
+        friends.forEach(f => {
+            if (state.friendFilterToggles[f.id] === undefined) {
+                state.friendFilterToggles[f.id] = true;
+            }
+        });
+        // Remove toggles for friends no longer in list
+        const friendIdSet = new Set(friends.map(f => f.id));
+        Object.keys(state.friendFilterToggles).forEach(id => {
+            if (!friendIdSet.has(id)) {
+                delete state.friendFilterToggles[id];
+            }
+        });
+
         renderFriendsList();
     } catch (error) {
         console.error('Failed to load friends:', error);
@@ -432,11 +449,22 @@ const state = {
         intervalId: null,
         hideControlsTimeout: null,
     },
-    // Gallery sort settings
+    // My Photos sort settings
     sort: {
-        field: 'date_taken', // 'date_taken' (촬영/다운로드 시간) or 'created_at' (업로드 시간)
-        order: 'desc',       // 'asc' (오름차순) or 'desc' (내림차순)
+        field: 'date_taken',
+        order: 'desc',
     },
+    // Friends tab filters & sort (independent from My Photos)
+    friendFilters: {
+        location: '',
+        startDate: '',
+        endDate: '',
+    },
+    friendSort: {
+        field: 'date_taken',
+        order: 'desc',
+    },
+    friendFilterToggles: {}, // { friendId: true/false } — all true by default
     selectedSyncPhotos: new Set(),
     selectedAddToGroupPhotos: new Set(), // Selected photo IDs for adding to group
     syncFiles: [], // {file, preview, date, location, id}
@@ -459,8 +487,6 @@ const state = {
 // ============================================
 const elements = {
     // Header
-    searchToggle: document.getElementById('searchToggle'),
-    searchBar: document.getElementById('searchBar'),
     syncBtn: document.getElementById('syncBtn'),
     locationSearch: document.getElementById('locationSearch'),
     startDate: document.getElementById('startDate'),
@@ -478,6 +504,22 @@ const elements = {
     manageGroupsBtn: document.getElementById('manageGroupsBtn'),
     sortFieldSelect: document.getElementById('sortFieldSelect'),
     sortOrderSelect: document.getElementById('sortOrderSelect'),
+
+    // Friends tab filters & sort
+    friendLocationSearch: document.getElementById('friendLocationSearch'),
+    friendStartDate: document.getElementById('friendStartDate'),
+    friendEndDate: document.getElementById('friendEndDate'),
+    friendClearFilters: document.getElementById('friendClearFilters'),
+    friendSortFieldSelect: document.getElementById('friendSortFieldSelect'),
+    friendSortOrderSelect: document.getElementById('friendSortOrderSelect'),
+    friendFilterBtn: document.getElementById('friendFilterBtn'),
+
+    // Friend Filter Modal
+    friendFilterModal: document.getElementById('friendFilterModal'),
+    friendFilterSearchInput: document.getElementById('friendFilterSearchInput'),
+    friendFilterList: document.getElementById('friendFilterList'),
+    friendFilterSelectAll: document.getElementById('friendFilterSelectAll'),
+    friendFilterDeselectAll: document.getElementById('friendFilterDeselectAll'),
 
     // FAB
     slideshowBtn: document.getElementById('slideshowBtn'),
@@ -572,10 +614,6 @@ const elements = {
     sendFriendRequestBtn: document.getElementById('sendFriendRequestBtn'),
     friendSubTabActionBar: document.getElementById('friendSubTabActionBar'),
     friendSubTabSearchInput: document.getElementById('friendSubTabSearchInput'),
-    friendListModal: document.getElementById('friendListModal'),
-    friendListModalTitle: document.getElementById('friendListModalTitle'),
-    friendListModalIcon: document.getElementById('friendListModalIcon'),
-    friendListModalBody: document.getElementById('friendListModalBody'),
     editProfileBtn: document.getElementById('editProfileBtn'),
     deleteAccountBtn: document.getElementById('deleteAccountBtn'),
     blockFriendRequestsToggle: document.getElementById('blockFriendRequestsToggle'),
@@ -1218,8 +1256,40 @@ function getFilteredPhotos(photos) {
     return filtered;
 }
 
+function getFilteredFriendPhotos(photos) {
+    let filtered = [...photos];
+
+    // Filter by friend toggles
+    filtered = filtered.filter(photo =>
+        state.friendFilterToggles[photo.authorId] !== false
+    );
+
+    // Filter by location
+    if (state.friendFilters.location) {
+        const searchTerm = state.friendFilters.location.toLowerCase();
+        filtered = filtered.filter(photo =>
+            photo.location.toLowerCase().includes(searchTerm)
+        );
+    }
+
+    // Filter by date range
+    if (state.friendFilters.startDate) {
+        filtered = filtered.filter(photo =>
+            new Date(photo.date) >= new Date(state.friendFilters.startDate)
+        );
+    }
+
+    if (state.friendFilters.endDate) {
+        filtered = filtered.filter(photo =>
+            new Date(photo.date) <= new Date(state.friendFilters.endDate)
+        );
+    }
+
+    return filtered;
+}
+
 function renderGallery(galleryElement, photos, showLoadMore = false, hasMore = false, loadMoreCallback = null, isFriendsTab = false) {
-    const filtered = getFilteredPhotos(photos);
+    const filtered = isFriendsTab ? getFilteredFriendPhotos(photos) : getFilteredPhotos(photos);
 
     if (filtered.length === 0) {
         const emptyMessage = isFriendsTab
@@ -2370,8 +2440,6 @@ function renderAccountInfo() {
     renderFriendsList();
 }
 
-const MAX_INLINE_ITEMS = 5;
-
 function renderFriendItemHtml(friend) {
     const nickname = state.friendNicknames[friend.id];
     const nicknameHtml = nickname
@@ -2479,19 +2547,7 @@ function renderFriendsList() {
         return;
     }
 
-    const displayFriends = searchTerm ? filtered : filtered.slice(0, MAX_INLINE_ITEMS);
-    elements.friendsList.innerHTML = displayFriends.map(renderFriendItemHtml).join('');
-
-    if (!searchTerm && filtered.length > MAX_INLINE_ITEMS) {
-        elements.friendsList.innerHTML += `
-            <button class="btn btn-secondary btn-full btn-show-more" data-list-type="friends">
-                <i class="ph ph-dots-three"></i>
-                <span>더보기 (${filtered.length}명)</span>
-            </button>
-        `;
-        elements.friendsList.querySelector('.btn-show-more').addEventListener('click', () => openFriendListModal('friends'));
-    }
-
+    elements.friendsList.innerHTML = filtered.map(renderFriendItemHtml).join('');
     attachFriendListHandlers(elements.friendsList);
 }
 
@@ -2525,7 +2581,7 @@ function editFriendNickname(friendId) {
             }
             renderFriendsList();
             closeModal(elements.nicknameModal);
-            closeFriendListModalIfOpen();
+
         } catch (error) {
             console.error('Failed to update nickname:', error);
             showToast('별명 설정에 실패했습니다', 'error');
@@ -2599,19 +2655,7 @@ function renderReceivedRequests() {
         return;
     }
 
-    const displayRequests = searchTerm ? filtered : filtered.slice(0, MAX_INLINE_ITEMS);
-    list.innerHTML = displayRequests.map(renderReceivedRequestItemHtml).join('');
-
-    if (!searchTerm && filtered.length > MAX_INLINE_ITEMS) {
-        list.innerHTML += `
-            <button class="btn btn-secondary btn-full btn-show-more" data-list-type="received">
-                <i class="ph ph-dots-three"></i>
-                <span>더보기 (${filtered.length}건)</span>
-            </button>
-        `;
-        list.querySelector('.btn-show-more').addEventListener('click', () => openFriendListModal('received'));
-    }
-
+    list.innerHTML = filtered.map(renderReceivedRequestItemHtml).join('');
     attachReceivedRequestHandlers(list);
 }
 
@@ -2639,19 +2683,7 @@ function renderSentRequests() {
         return;
     }
 
-    const displayRequests = searchTerm ? filtered : filtered.slice(0, MAX_INLINE_ITEMS);
-    list.innerHTML = displayRequests.map(renderSentRequestItemHtml).join('');
-
-    if (!searchTerm && filtered.length > MAX_INLINE_ITEMS) {
-        list.innerHTML += `
-            <button class="btn btn-secondary btn-full btn-show-more" data-list-type="sent">
-                <i class="ph ph-dots-three"></i>
-                <span>더보기 (${filtered.length}건)</span>
-            </button>
-        `;
-        list.querySelector('.btn-show-more').addEventListener('click', () => openFriendListModal('sent'));
-    }
-
+    list.innerHTML = filtered.map(renderSentRequestItemHtml).join('');
     attachSentRequestHandlers(list);
 }
 
@@ -2684,39 +2716,6 @@ function updateRequestBadges() {
     }
 }
 
-function openFriendListModal(type) {
-    const config = {
-        friends: { title: '친구 목록', icon: 'ph-users' },
-        received: { title: '받은 친구 요청', icon: 'ph-user-circle-check' },
-        sent: { title: '보낸 친구 요청', icon: 'ph-paper-plane-tilt' },
-    };
-
-    const { title, icon } = config[type];
-    elements.friendListModalTitle.textContent = title;
-    elements.friendListModalIcon.className = `ph ${icon}`;
-
-    const body = elements.friendListModalBody;
-
-    if (type === 'friends') {
-        body.innerHTML = state.friends.map(renderFriendItemHtml).join('');
-        attachFriendListHandlers(body);
-    } else if (type === 'received') {
-        body.innerHTML = state.pendingRequests.received.map(renderReceivedRequestItemHtml).join('');
-        attachReceivedRequestHandlers(body);
-    } else if (type === 'sent') {
-        body.innerHTML = state.pendingRequests.sent.map(renderSentRequestItemHtml).join('');
-        attachSentRequestHandlers(body);
-    }
-
-    openModal(elements.friendListModal);
-}
-
-function closeFriendListModalIfOpen() {
-    if (elements.friendListModal.classList.contains('active')) {
-        closeModal(elements.friendListModal);
-    }
-}
-
 // ============================================
 // Friend Request Handlers
 // ============================================
@@ -2733,7 +2732,6 @@ async function handleAcceptRequest(friendshipId) {
         await loadFriendPhotos();
         elements.friendCount.textContent = state.friends.length;
         setupFriendPhotosSubscription();
-        closeFriendListModalIfOpen();
     } catch (error) {
         console.error('Failed to accept request:', error);
         showToast('친구 요청 수락에 실패했습니다', 'error');
@@ -2748,7 +2746,6 @@ async function handleRejectRequest(friendshipId) {
         await apiRejectFriendRequest(user.id, friendshipId);
         showToast('친구 요청을 거절했습니다', 'info');
         await loadPendingRequests();
-        closeFriendListModalIfOpen();
     } catch (error) {
         console.error('Failed to reject request:', error);
         showToast('친구 요청 거절에 실패했습니다', 'error');
@@ -2763,7 +2760,6 @@ async function handleCancelRequest(friendshipId) {
         await apiCancelFriendRequest(user.id, friendshipId);
         showToast('친구 요청을 취소했습니다', 'info');
         await loadPendingRequests();
-        closeFriendListModalIfOpen();
     } catch (error) {
         console.error('Failed to cancel request:', error);
         showToast('친구 요청 취소에 실패했습니다', 'error');
@@ -2787,7 +2783,7 @@ function confirmRemoveFriend(friendId) {
             delete state.friendNicknames[friendId];
             renderFriendsList();
             showToast('친구가 삭제되었습니다', 'success');
-            closeFriendListModalIfOpen();
+
         } catch (error) {
             console.error('Failed to remove friend:', error);
             showToast('친구 삭제에 실패했습니다', 'error');
@@ -3157,20 +3153,12 @@ async function sendFriendRequestFromSearch(friendId, friendName, buttonElement) 
 // ============================================
 // Search & Filters
 // ============================================
-function toggleSearchBar() {
-    elements.searchBar.classList.toggle('active');
-}
-
 function applyFilters() {
     state.filters.location = elements.locationSearch.value;
     state.filters.startDate = elements.startDate.value;
     state.filters.endDate = elements.endDate.value;
 
-    if (state.currentTab === 'my-photos') {
-        renderMyPhotos();
-    } else if (state.currentTab === 'friends') {
-        renderFriendPhotos();
-    }
+    renderMyPhotos();
 }
 
 function clearFilters() {
@@ -3184,13 +3172,123 @@ function clearFilters() {
         endDate: '',
     };
 
-    if (state.currentTab === 'my-photos') {
-        renderMyPhotos();
-    } else if (state.currentTab === 'friends') {
-        renderFriendPhotos();
-    }
+    renderMyPhotos();
 
     showToast('필터가 초기화되었습니다', 'success');
+}
+
+// ============================================
+// Friends Tab Filters & Sort
+// ============================================
+function applyFriendFilters() {
+    state.friendFilters.location = elements.friendLocationSearch.value;
+    state.friendFilters.startDate = elements.friendStartDate.value;
+    state.friendFilters.endDate = elements.friendEndDate.value;
+
+    renderFriendPhotos();
+}
+
+function clearFriendFilters() {
+    elements.friendLocationSearch.value = '';
+    elements.friendStartDate.value = '';
+    elements.friendEndDate.value = '';
+
+    state.friendFilters = {
+        location: '',
+        startDate: '',
+        endDate: '',
+    };
+
+    renderFriendPhotos();
+
+    showToast('필터가 초기화되었습니다', 'success');
+}
+
+async function handleFriendSortFieldChange(field) {
+    state.friendSort.field = field;
+    await loadFriendPhotos(false);
+}
+
+async function handleFriendSortOrderChange(order) {
+    state.friendSort.order = order;
+    await loadFriendPhotos(false);
+}
+
+// ============================================
+// Friend Filter Modal
+// ============================================
+function openFriendFilterModal() {
+    elements.friendFilterSearchInput.value = '';
+    renderFriendFilterList();
+    openModal(elements.friendFilterModal);
+}
+
+function renderFriendFilterList(searchTerm = '') {
+    const term = searchTerm.toLowerCase();
+    const filtered = state.friends.filter(f => {
+        if (!term) return true;
+        const nickname = state.friendNicknames[f.id] || '';
+        return f.name.toLowerCase().includes(term)
+            || f.username.toLowerCase().includes(term)
+            || nickname.toLowerCase().includes(term);
+    });
+
+    if (filtered.length === 0) {
+        elements.friendFilterList.innerHTML = `
+            <div class="friend-filter-empty">
+                <p>${state.friends.length === 0 ? '친구가 없습니다' : '검색 결과가 없습니다'}</p>
+            </div>
+        `;
+        return;
+    }
+
+    elements.friendFilterList.innerHTML = filtered.map(friend => {
+        const nickname = state.friendNicknames[friend.id] || '';
+        const isOn = state.friendFilterToggles[friend.id] !== false;
+        return `
+            <div class="friend-filter-item" data-friend-id="${friend.id}">
+                <div class="friend-avatar">
+                    ${renderAvatarContent(friend.avatar, friend.name)}
+                </div>
+                <div class="friend-info">
+                    <div class="friend-name">
+                        ${friend.name}
+                        ${nickname ? `<span class="friend-nickname">(${nickname})</span>` : ''}
+                    </div>
+                    <div class="friend-id">@${friend.username}</div>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" class="friend-filter-toggle" data-friend-id="${friend.id}" ${isOn ? 'checked' : ''}>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        `;
+    }).join('');
+
+    // Attach toggle event listeners
+    elements.friendFilterList.querySelectorAll('.friend-filter-toggle').forEach(toggle => {
+        toggle.addEventListener('change', (e) => {
+            const friendId = e.target.dataset.friendId;
+            state.friendFilterToggles[friendId] = e.target.checked;
+            renderFriendPhotos();
+        });
+    });
+}
+
+function friendFilterSelectAll() {
+    state.friends.forEach(f => {
+        state.friendFilterToggles[f.id] = true;
+    });
+    renderFriendFilterList(elements.friendFilterSearchInput.value);
+    renderFriendPhotos();
+}
+
+function friendFilterDeselectAll() {
+    state.friends.forEach(f => {
+        state.friendFilterToggles[f.id] = false;
+    });
+    renderFriendFilterList(elements.friendFilterSearchInput.value);
+    renderFriendPhotos();
 }
 
 // ============================================
@@ -3224,14 +3322,33 @@ function setupKeyboardShortcuts() {
 // ============================================
 function setupEventListeners() {
     // Header
-    elements.searchToggle.addEventListener('click', toggleSearchBar);
     elements.syncBtn.addEventListener('click', openSyncModal);
     elements.clearFilters.addEventListener('click', clearFilters);
 
-    // Search inputs
+    // My Photos search inputs
     elements.locationSearch.addEventListener('input', applyFilters);
     elements.startDate.addEventListener('change', applyFilters);
     elements.endDate.addEventListener('change', applyFilters);
+
+    // Friends tab filters & sort
+    elements.friendLocationSearch.addEventListener('input', applyFriendFilters);
+    elements.friendStartDate.addEventListener('change', applyFriendFilters);
+    elements.friendEndDate.addEventListener('change', applyFriendFilters);
+    elements.friendClearFilters.addEventListener('click', clearFriendFilters);
+    elements.friendSortFieldSelect.addEventListener('change', (e) => {
+        handleFriendSortFieldChange(e.target.value);
+    });
+    elements.friendSortOrderSelect.addEventListener('change', (e) => {
+        handleFriendSortOrderChange(e.target.value);
+    });
+    elements.friendFilterBtn.addEventListener('click', openFriendFilterModal);
+
+    // Friend filter modal
+    elements.friendFilterSearchInput.addEventListener('input', (e) => {
+        renderFriendFilterList(e.target.value);
+    });
+    elements.friendFilterSelectAll.addEventListener('click', friendFilterSelectAll);
+    elements.friendFilterDeselectAll.addEventListener('click', friendFilterDeselectAll);
 
     // Tab navigation
     elements.tabBtns.forEach(btn => {

@@ -616,12 +616,17 @@ export async function getFriendsPhotos(userId, params = {}) {
         return [];
     }
 
+    // Determine sort field and order
+    const sortField = params.sortField || 'date_taken';
+    const sortOrder = params.sortOrder || 'desc';
+    const ascending = sortOrder === 'asc';
+
     // Get photos without FK join on users (avoids dependency on photos_user_id_fkey)
     let query = supabase
         .from('photos')
         .select('*')
         .in('user_id', uniqueFriendIds)
-        .order('date_taken', { ascending: false });
+        .order(sortField, { ascending });
 
     // Pagination - use range for offset+limit, otherwise just limit
     if (params.offset !== undefined && params.offset > 0) {
